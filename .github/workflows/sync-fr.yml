@@ -1,8 +1,8 @@
-name: Sync Norway (Tolletaten)
+name: Sync France (RITA)
 
 on:
   schedule:
-    - cron: '0 4 * * *'   # daily 04:00 UTC
+    - cron: '0 5 * * *'   # daily 05:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -14,24 +14,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download from Tolletaten CKAN
+      - name: Download from RITA (Douane FR)
         shell: pwsh
-        run: scripts/sync-no.ps1 -OutputFolder downloads/no
+        run: scripts/sync-fr.ps1 -OutputFolder downloads/fr
 
       - name: Publish to release
-        if: hashFiles('downloads/no/*') != ''
+        if: hashFiles('downloads/fr/*') != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="no-$(date -u +%Y-%m)"
+          TAG="fr-$(date -u +%Y-%m)"
 
           gh release view "$TAG" 2>/dev/null || \
             gh release create "$TAG" \
-              --title "Norway Customs Tariff ${TAG}" \
-              --notes "Auto-synced from [Tolletaten open data](https://data.toll.no) (CC BY 4.0). Includes all 27 published datasets: tariff structure, duty rates, quotas, restrictions, trade agreements, country groups, exchange rates, and more."
+              --title "France RITA ${TAG}" \
+              --notes "Auto-synced from [RITA (Référentiel Intégré Tarifaire Automatisé)](https://www.douane.gouv.fr/rita-encyclopedie/public/experts/telechargements/init.action). Contains EU TARIC + French national measures (TVA, droits d'accise, autres taxes nationales)."
 
           EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
-          for f in downloads/no/*; do
+          for f in downloads/fr/*; do
             name=$(basename "$f")
             if echo "$EXISTING" | grep -qF "\"$name\""; then
               echo "Already uploaded: $name"

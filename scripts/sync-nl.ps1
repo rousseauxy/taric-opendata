@@ -2,6 +2,7 @@
 # Source manifest: https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml
 param(
     [string]$OutputFolder = "downloads/nl",
+    [string]$Month        = (Get-Date -Format "yyyy-MM"),
     [switch]$Force
 )
 
@@ -17,27 +18,19 @@ $xml = [xml]$manifestContent.Content
 # Save raw manifest for traceability
 $xml.Save((Join-Path $OutputFolder "manifest.xml"))
 
-# Collect all download URLs from the manifest.
-# The DTV manifest contains elements with url/href attributes or text content URLs.
-$urls = @()
-$xml.SelectNodes("//*") | ForEach-Object {
-    foreach ($attr in $_.Attributes) {
-        if ($attr.Value -match "^https?://" -and $attr.Value -match "\.(zip|xml|gz)") {
-            $urls += $attr.Value
-        }
-    }
-    if ($_.InnerText -match "^https?://" -and $_.InnerText -match "\.(zip|xml|gz)") {
-        $urls += $_.InnerText.Trim()
-    }
-}
-$urls = $urls | Select-Object -Unique
+# Extract download URLs from the manifest using the known <download><url> structure.
+# The month filter maps "yyyy-MM" → "yyyy_MM" to match the filename date prefix.
+$monthPrefix = $Month -replace '-', '_'
+$urls = $xml.SelectNodes("//download/url") |
+    ForEach-Object { $_.InnerText.Trim() } |
+    Where-Object { $_ -match [regex]::Escape($monthPrefix) }
 
 if ($urls.Count -eq 0) {
-    Write-Warning "No download URLs found in manifest. Inspect $OutputFolder/manifest.xml to determine the correct structure."
+    Write-Warning "No files found in manifest for month '$Month'. Inspect $OutputFolder/manifest.xml to check availability."
     exit 1
 }
 
-Write-Host "Found $($urls.Count) file(s) in manifest"
+Write-Host "Found $($urls.Count) file(s) in manifest for $Month"
 
 $downloaded = @()
 foreach ($url in $urls) {
@@ -50,9 +43,14 @@ foreach ($url in $urls) {
     }
 
     Write-Host "Downloading: $filename"
-    Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing
-    $downloaded += $filename
-    Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing
+        $downloaded += $filename
+        Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
+    } catch {
+        Write-Warning "Failed: $filename — $_"
+        if (Test-Path $outPath) { Remove-Item $outPath }
+    }
 }
 
 Write-Host "Downloaded $($downloaded.Count) new file(s)"

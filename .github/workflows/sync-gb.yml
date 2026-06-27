@@ -28,7 +28,7 @@ jobs:
           gh release view "$TAG" 2>/dev/null || \
             gh release create "$TAG" \
               --title "UK Global Tariff ${TAG}" \
-              --notes "Auto-synced from the [DBT Data API](https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01). Contains the UK Global Tariff: commodities, measures-on-declarable-commodities, measures-as-defined. Version is embedded in each filename."
+              --notes "Auto-synced from the [DBT Data API](https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01). Contains all 50 UK Global Tariff tables (commodities, measures, quotas, regulations, certificates, geo areas, footnotes, and more) as CSV. Version is embedded in each filename."
 
           EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/gb/*; do
