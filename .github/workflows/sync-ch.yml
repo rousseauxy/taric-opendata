@@ -1,0 +1,37 @@
+name: Sync Switzerland (BAZG)
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # daily 07:00 UTC (after BAZG nightly generation)
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download from BAZG datahub
+        shell: pwsh
+        run: scripts/sync-ch.ps1 -OutputFolder downloads/ch
+
+      - name: Publish to release
+        if: hashFiles('downloads/ch/*.zip') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="ch-$(date -u +%Y-%m)"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "Switzerland BAZG ${TAG}" \
+              --notes "Auto-synced from [BAZG datahub](https://datahub.bazg.admin.ch/public-resources/). Contains Swiss tariff master data including duty rates (TariffMasterData), commodity tree, country codes, and Passar/TAXUD code lists as ZIP-compressed XML. Files are replaced in-place as BAZG publishes daily updates."
+
+          for f in downloads/ch/*.zip; do
+            name=$(basename "$f")
+            echo "Uploading: $name"
+            gh release upload "$TAG" "$f" --clobber
+          done
