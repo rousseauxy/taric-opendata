@@ -1,0 +1,7 @@
+# .gitignore
+
+# Environment & secrets — NEVER commit these
+CLAUDE.md
+
+# Downloads
+downloads/

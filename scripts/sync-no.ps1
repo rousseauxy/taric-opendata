@@ -10,11 +10,46 @@ New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
 $CkanBase = "https://data.toll.no/api/3/action"
 
-# Datasets to mirror. customstariffstructure is the primary tariff hierarchy;
-# tollkvote adds quota data useful for measure enrichment.
+# All datasets published by Tolletaten on data.toll.no (CC BY 4.0).
 $datasetIds = @(
+    # Tariff structure & commodity numbers
     "customstariffstructure",
-    "tollkvote"
+    "tolltariffstruktur",
+    "varenummer",
+    "datogyldighetforvare",
+
+    # Duty rates
+    "tollavgiftssats",
+    "innfoerselsavgift",
+    "raavaretollavgiftssats",
+    "tilleggstollavgiftssats",
+    "ratetradeagreements",
+    "utfoerselsavgift",
+
+    # Quotas & concessions
+    "tollkvote",
+    "boundtariffconcessions",
+    "lettelse",
+
+    # Restrictions & references
+    "innfoerselsrestriksjon",
+    "innfoerselsreferanse",
+    "utfoerselsrestriksjon",
+    "utfoerselsreferanse",
+    "henvisning",
+    "reference",
+
+    # Classification & lookup
+    "landgruppe",
+    "medlemsland",
+    "prosedyrekode",
+    "typetilfelle",
+    "ekspedisjonsenhet",
+    "feilmelding",
+
+    # Exchange rates
+    "valutakurs",
+    "valutakurs_historisk"
 )
 
 $downloaded = @()
@@ -48,9 +83,14 @@ foreach ($id in $datasetIds) {
         }
 
         Write-Host "Downloading: $filename"
-        Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing
-        $downloaded += $filename
-        Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing
+            $downloaded += $filename
+            Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
+        } catch {
+            Write-Warning "Failed: $filename — $_"
+            if (Test-Path $outPath) { Remove-Item $outPath }
+        }
     }
 }
 
