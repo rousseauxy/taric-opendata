@@ -59,7 +59,7 @@ $files = Get-Children $monthFolder.NodeId | Where-Object { $_.MimeType -match 's
 if (-not $files) { Write-Host "No XLSX files found in $($monthFolder.Title)"; exit 0 }
 Write-Host "Found $($files.Count) XLSX files"
 
-$tmpDir  = Join-Path $env:TEMP "eu-taric-$zipMonth"
+$tmpDir  = Join-Path ([System.IO.Path]::GetTempPath()) "eu-taric-$zipMonth"
 New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
 $count = 0
