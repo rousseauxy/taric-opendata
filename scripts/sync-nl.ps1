@@ -11,9 +11,17 @@ New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
 $ManifestUrl = "https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml"
 
+$curlHeaders = @(
+    "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "-H", "Accept-Language: nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
+    "-H", "Referer: https://www.belastingdienst.nl/"
+)
+
 Write-Host "Fetching DTV download manifest..."
-$manifestContent = Invoke-WebRequest -Uri $ManifestUrl -UseBasicParsing
-$xml = [xml]$manifestContent.Content
+$manifestText = curl.exe -fsSL @curlHeaders $ManifestUrl
+if ($LASTEXITCODE -ne 0) { throw "curl failed fetching manifest (exit $LASTEXITCODE)" }
+$xml = [xml]$manifestText
 
 # Save raw manifest for traceability
 $xml.Save((Join-Path $OutputFolder "manifest.xml"))
@@ -43,13 +51,13 @@ foreach ($url in $urls) {
     }
 
     Write-Host "Downloading: $filename"
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing
+    curl.exe -fsSL @curlHeaders -o $outPath $url
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Failed: $filename (curl exit $LASTEXITCODE)"
+        if (Test-Path $outPath) { Remove-Item $outPath }
+    } else {
         $downloaded += $filename
         Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
-    } catch {
-        Write-Warning "Failed: $filename — $_"
-        if (Test-Path $outPath) { Remove-Item $outPath }
     }
 }
 
