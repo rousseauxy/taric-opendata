@@ -1,0 +1,34 @@
+name: Sync Poland (ISZTAR4)
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'   # monthly on the 1st at 02:00 UTC (file updates ~annually)
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download ISZTAR4 startup file
+        shell: pwsh
+        run: scripts/sync-pl.ps1 -OutputFolder downloads/pl
+
+      - name: Publish to release
+        if: hashFiles('downloads/pl/*.zip') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="pl-$(date -u +%Y)"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "Poland ISZTAR4 ${TAG}" \
+              --notes "Auto-synced from [ISZTAR4 XmlExtractions](https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions). Full startup file containing all EU TARIC + Polish national tariff objects (~7.7 GB XML, ~220 MB compressed ZIP). Source: Ministry of Finance (Ministerstwo Finansów) + European Commission DG TAXUD."
+
+          gh release upload "$TAG" downloads/pl/isztar4-base.zip --clobber
