@@ -76,7 +76,7 @@ $tables   = @(
     "regulation-groups",
     "regulation-amendments",
     "regulation-replacements",
-    "regulation-suspensions",
+    "regulation-suspensions"
 
     # Omitted: common-tracked-models, common-transactions, common-version-groups
     # These are internal TARIC audit/versioning tables (~1.5 GB combined) with no tariff data value.

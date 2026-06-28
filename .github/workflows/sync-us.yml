@@ -1,0 +1,48 @@
+name: Sync US HTS (USITC)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stored revision marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/us
+          YEAR=$(date -u +%Y)
+          gh release download "us-$YEAR" --pattern "hts-version.json" --dir downloads/us 2>/dev/null || true
+
+      - name: Download from USITC
+        shell: pwsh
+        run: scripts/sync-us.ps1 -OutputFolder downloads/us
+
+      - name: Publish to release
+        if: hashFiles('downloads/us/hts-us.json') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          YEAR=$(date -u +%Y)
+          TAG="us-$YEAR"
+          VERSION=$(jq -r '.name' downloads/us/hts-version.json)
+          TITLE=$(jq -r '.title' downloads/us/hts-version.json)
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "US Harmonized Tariff Schedule $YEAR" \
+              --notes "Auto-synced from [USITC HTS](https://hts.usitc.gov/). Full Harmonized Tariff Schedule of the United States published by the U.S. International Trade Commission. Contains all chapters 01-99: HTS numbers, descriptions, indent levels, general/special/column-2 duty rates, units of quantity, quota quantities, and additional duties. Updated per revision (~10 revisions/year)."
+
+          gh release upload "$TAG" downloads/us/hts-us.json --clobber
+          gh release upload "$TAG" downloads/us/hts-us.csv  --clobber
+          gh release upload "$TAG" downloads/us/hts-version.json --clobber
+
+          echo "Published $VERSION to $TAG"
