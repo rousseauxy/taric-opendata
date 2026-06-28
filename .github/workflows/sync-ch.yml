@@ -1,8 +1,6 @@
 name: Sync Switzerland (BAZG)
 
 on:
-  schedule:
-    - cron: '0 7 * * *'   # daily 07:00 UTC (after BAZG nightly generation)
   workflow_dispatch:
 
 jobs:

@@ -1,8 +1,6 @@
 name: Sync Belgium (Tarbel)
 
 on:
-  schedule:
-    - cron: '15 1 * * *'   # daily 01:15 UTC — after tarbel-opendata runs at 01:05
   workflow_dispatch:
 
 jobs:

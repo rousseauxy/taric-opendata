@@ -1,8 +1,6 @@
 name: Sync Poland (ISZTAR4)
 
 on:
-  schedule:
-    - cron: '0 2 1 * *'   # monthly on the 1st at 02:00 UTC (file updates ~annually)
   workflow_dispatch:
 
 jobs:
