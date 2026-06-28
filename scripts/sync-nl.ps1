@@ -19,7 +19,7 @@ $curlHeaders = @(
 )
 
 Write-Host "Fetching DTV download manifest..."
-$manifestText = curl.exe -fsSL @curlHeaders $ManifestUrl
+$manifestText = curl -fsSL @curlHeaders $ManifestUrl
 if ($LASTEXITCODE -ne 0) { throw "curl failed fetching manifest (exit $LASTEXITCODE)" }
 $xml = [xml]$manifestText
 
