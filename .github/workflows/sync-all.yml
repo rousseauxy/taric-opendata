@@ -1,0 +1,25 @@
+name: Sync All Countries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  be:
+    uses: ./.github/workflows/sync-be.yml
+  nl:
+    uses: ./.github/workflows/sync-nl.yml
+  gb:
+    uses: ./.github/workflows/sync-gb.yml
+  no:
+    uses: ./.github/workflows/sync-no.yml
+  se:
+    uses: ./.github/workflows/sync-se.yml
+  ch:
+    uses: ./.github/workflows/sync-ch.yml
+  pl:
+    uses: ./.github/workflows/sync-pl.yml
+  fr:
+    uses: ./.github/workflows/sync-fr.yml

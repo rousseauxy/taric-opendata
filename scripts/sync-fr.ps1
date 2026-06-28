@@ -1,75 +1,93 @@
 # Downloads French RITA (Référentiel Intégré Tarifaire Automatisé) tariff data.
 # Source: https://www.douane.gouv.fr/rita-encyclopedie/public/experts/telechargements/init.action
-# RITA is a JSF (PrimeFaces) application — downloads require ViewState + AJAX + form POST,
-# same pattern as rousseauxy/tarbel-opendata/download.ps1.
+# Plain HTML form — no JSF/ViewState, no session required. Stateless POST per file.
 #
-# TODO: Complete download logic after inspecting RITA network calls in browser DevTools:
-#   1. GET init.action → extract ViewState + jsessionid from form action URL
-#   2. POST AJAX to trigger file listing (javax.faces.partial.ajax=true)
-#   3. POST non-AJAX form submission per file to trigger download
+# Downloads:
+#   1. 7 global reference XMLs (countries, additional codes, documents, regimes, etc.)
+#   2. exportNomencDroit for all CN chapters → zipped into RITA_NomencDroit.zip
 param(
     [string]$OutputFolder = "downloads/fr",
     [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+$OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
-$BaseUrl   = "https://www.douane.gouv.fr/rita-encyclopedie"
-$PageUrl   = "$BaseUrl/public/experts/telechargements/init.action"
-$UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+$PageUrl = "https://www.douane.gouv.fr/rita-encyclopedie/public/experts/telechargements/init.action"
+$UA      = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+$Format  = "XML"
 
-function Get-JSFViewState {
-    param([string]$Html, [string]$FormId = $null)
-    if ($FormId) {
-        $esc = [regex]::Escape($FormId)
-        if ($Html -match "(?s)<form[^>]*id=`"$esc`"[^>]*>.*?<input[^>]*name=`"javax\.faces\.ViewState`"[^>]*value=`"([^`"]+)`"") {
-            return $matches[1]
-        }
+# ─── 1. Global reference files ───────────────────────────────────────────────
+
+$globalExports = [ordered]@{
+    exportPays     = "RITA_Donnees_references_GEO.xml"   # Countries / geographical areas
+    exportCodAdd   = "RITA_Donnees_references_CAC.xml"   # Additional codes
+    exportDocument = "RITA_Donnees_references_DOC.xml"   # Document references
+    exportRenvoi   = "RITA_Donnees_references_RNV.xml"   # Renvoi (cross-references)
+    exportCodCpta  = "RITA_Donnees_references_CTX.xml"   # Tax/accounting codes
+    exportRegime   = "RITA_Donnees_references_RGD.xml"   # Customs regimes
+    exportCodMesa  = "RITA_Donnees_references_UTM.xml"   # Units of measurement
+}
+
+$downloaded = @()
+$skipped    = @()
+
+foreach ($kv in $globalExports.GetEnumerator()) {
+    $outPath = Join-Path $OutputFolder $kv.Value
+    if (-not $Force -and (Test-Path $outPath)) {
+        Write-Host "Already exists: $($kv.Value)"
+        $skipped += $kv.Value
+        continue
     }
-    if ($Html -match 'javax\.faces\.ViewState[^>]*value="([^"]+)"') { return $matches[1] }
-    if ($Html -match '(?s)javax\.faces\.ViewState[^>]*>\s*<!\[CDATA\[(.+?)\]\]>')    { return $matches[1] }
-    return $null
+    Write-Host "Downloading $($kv.Key) → $($kv.Value)..."
+    try {
+        $body = "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&$($kv.Key)=T%C3%A9l%C3%A9charger"
+        $r = Invoke-WebRequest -Uri $PageUrl -Method POST -Body $body -ContentType "application/x-www-form-urlencoded" `
+            -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        if ($r.Content -match 'Aucune donn|Fichier non') { Write-Warning "$($kv.Key): no data returned"; continue }
+        Set-Content -Path $outPath -Value $r.Content -Encoding UTF8 -NoNewline
+        $downloaded += $kv.Value
+        Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
+    } catch { Write-Warning "Failed $($kv.Key): $_" }
 }
 
-Write-Host "Loading RITA downloads page..."
-try {
-    $page = Invoke-WebRequest -Uri $PageUrl -UserAgent $UserAgent -UseBasicParsing -SessionVariable session -MaximumRedirection 10
-} catch {
-    Write-Error "Failed to load RITA downloads page: $_"
-    exit 1
+# ─── 2. Combined Nomenclature + duties (exportNomencDroit) per CN chapter ────
+
+$nomZip = Join-Path $OutputFolder "RITA_NomencDroit.zip"
+$nomTmp = Join-Path $OutputFolder "_nomenc_tmp"
+New-Item -ItemType Directory -Force -Path $nomTmp | Out-Null
+
+# Get chapter list from the live page
+Write-Host "`nFetching chapter list from RITA..."
+$page     = Invoke-WebRequest -Uri $PageUrl -UserAgent $UA -UseBasicParsing -MaximumRedirection 10
+$chapters = [regex]::Matches($page.Content, '<option[^>]*value="(\d{2})"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique | Sort-Object
+Write-Host "Found $($chapters.Count) chapters — downloading exportNomencDroit for each..."
+
+$nomDownloaded = 0
+foreach ($chp in $chapters) {
+    $xmlPath = Join-Path $nomTmp "RITA_NomencDroit_CHP$chp.xml"
+    Write-Host "  Chapter $chp..." -NoNewline
+    try {
+        $r = Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
+            -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritereD.code=$chp&exportNomencDroit=T%C3%A9l%C3%A9charger" `
+            -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        if ($r.Content -match 'Aucune donn|Fichier non') { Write-Host " (no data)"; continue }
+        Set-Content -Path $xmlPath -Value $r.Content -Encoding UTF8 -NoNewline
+        $nomDownloaded++
+        Write-Host " $([math]::Round((Get-Item $xmlPath).Length / 1KB)) KB"
+    } catch { Write-Host " FAILED: $_" }
 }
 
-$viewState = Get-JSFViewState -Html $page.Content
-if (-not $viewState) {
-    Write-Error "Could not extract JSF ViewState — page structure may have changed."
-    exit 1
+if ($nomDownloaded -gt 0) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if (Test-Path $nomZip) { Remove-Item $nomZip }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($nomTmp, $nomZip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+    $downloaded += "RITA_NomencDroit.zip"
+    Write-Host "Zipped $nomDownloaded chapters → $([math]::Round((Get-Item $nomZip).Length / 1MB, 1)) MB"
 }
+Remove-Item $nomTmp -Recurse -Force -ErrorAction SilentlyContinue
 
-# Extract jsessionid-bearing form action URL (required for correct server-side routing)
-$formActionUrl = $PageUrl
-if ($page.Content -match 'action="(/rita-encyclopedie/[^"]+;jsessionid=[^"]+)"') {
-    $formActionUrl = "https://www.douane.gouv.fr$($matches[1])"
-}
-
-Write-Host "ViewState extracted. Form action: $formActionUrl"
-
-# TODO: Inspect RITA DevTools network tab to determine:
-#
-#   A) AJAX call that loads the file listing:
-#      - javax.faces.source      = ??? (the PrimeFaces component ID that triggers the list)
-#      - javax.faces.partial.execute = ???
-#      - javax.faces.partial.render  = ??? (the results container component ID)
-#
-#   B) File listing pattern in the AJAX response:
-#      - What HTML/component renders the file list?
-#      - How to extract filename + button ID per file?
-#
-#   C) Download POST body per file:
-#      - Form ID, button ID, any year/month/type fields
-#
-# Once known, implement steps 2 and 3 here following the tarbel-opendata pattern.
-# Reference: https://github.com/rousseauxy/tarbel-opendata/blob/main/download.ps1
-
-Write-Error "sync-fr.ps1: download logic not yet implemented — RITA was under outage during development. Complete TODOs above after inspecting browser DevTools on the RITA downloads page."
-exit 1
+Write-Host ""
+Write-Host "Downloaded: $($downloaded.Count) file(s)"
+if ($skipped.Count -gt 0) { Write-Host "Skipped (already exist): $($skipped.Count)" }

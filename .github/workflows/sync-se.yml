@@ -2,6 +2,7 @@ name: Sync Sweden (Tulltaxan)
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   sync:
