@@ -1,0 +1,38 @@
+name: Sync EU TARIC (CIRCABC)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download from CIRCABC (DG TAXUD)
+        shell: pwsh
+        run: scripts/sync-eu.ps1 -OutputFolder downloads/eu
+
+      - name: Publish to release
+        if: hashFiles('downloads/eu/*.zip') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          YEAR=$(date -u +%Y)
+          MONTH=$(date -u +%m)
+          TAG="eu-${YEAR}-${MONTH}"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "EU TARIC ${YEAR}-${MONTH}" \
+              --notes "Auto-synced from [CIRCABC (DG TAXUD)](https://circabc.europa.eu/ui/group/0e5f18c2-4b2f-42e9-aed4-dfe50ae1263b/library/64db9d0f-e7c9-4084-afe9-f47e70e53c10). Monthly XLSX extractions of the EU TARIC database published by European Commission DG TAXUD. Contains: nomenclature (EN/FR/DE), import/export duties, measures, conditions, exclusions, geographical areas, additional codes, exchange rates, legal basis."
+
+          for f in downloads/eu/*.zip; do
+            name=$(basename "$f")
+            gh release upload "$TAG" "$f" --clobber
+          done
