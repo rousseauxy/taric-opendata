@@ -51,7 +51,7 @@ foreach ($url in $urls) {
     }
 
     Write-Host "Downloading: $filename"
-    curl.exe -fsSL @curlHeaders -o $outPath $url
+    curl -fsSL @curlHeaders -o $outPath $url
     if ($LASTEXITCODE -ne 0) {
         Write-Warning "Failed: $filename (curl exit $LASTEXITCODE)"
         if (Test-Path $outPath) { Remove-Item $outPath }
