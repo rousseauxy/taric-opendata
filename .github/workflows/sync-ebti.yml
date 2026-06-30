@@ -1,0 +1,51 @@
+name: Sync EU BTI (EBTI)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-download even if already in the release'
+        type: boolean
+        default: false
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stored version marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/ebti
+          YEAR=$(date -u +%Y)
+          gh release download "ebti-$YEAR" --pattern "ebti-version.txt" --dir downloads/ebti 2>/dev/null || true
+
+      - name: Download EBTI full extract
+        shell: pwsh
+        run: |
+          $params = @{ OutputFolder = 'downloads/ebti' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-ebti.ps1 @params
+
+      - name: Publish to release
+        if: hashFiles('downloads/ebti/DDS2-EBTI_Full.zip') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          YEAR=$(date -u +%Y)
+          TAG="ebti-$YEAR"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "EU Binding Tariff Information (EBTI) $YEAR" \
+              --notes "Auto-synced from [DDS2 EBTI](https://ec.europa.eu/taxation_customs/dds2/ebti/). Full extract of all EU Binding Tariff Information decisions across all member states. Contains TARIC/CN commodity codes, product descriptions, and the official classification decisions issued by national customs authorities. Updated daily when the export date changes."
+
+          gh release upload "$TAG" downloads/ebti/DDS2-EBTI_Full.zip --clobber
+          gh release upload "$TAG" downloads/ebti/ebti-version.txt --clobber

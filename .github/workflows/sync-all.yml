@@ -27,5 +27,7 @@ jobs:
     uses: ./.github/workflows/sync-fr.yml
   eu:
     uses: ./.github/workflows/sync-eu.yml
+  ebti:
+    uses: ./.github/workflows/sync-ebti.yml
   us:
     uses: ./.github/workflows/sync-us.yml
