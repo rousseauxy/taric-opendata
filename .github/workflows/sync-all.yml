@@ -1,6 +1,8 @@
 name: Sync All Countries
 
 on:
+  schedule:
+    - cron: '0 22 * * *'
   workflow_dispatch:
 
 permissions:

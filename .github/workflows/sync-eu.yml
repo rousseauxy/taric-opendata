@@ -1,9 +1,6 @@
 name: Sync EU TARIC (CIRCABC + Daily)
 
 on:
-  schedule:
-    # Run at 22:00 UTC (~midnight Brussels CEST); daily delta ZIPs are published around 19:15 UTC
-    - cron: '0 22 * * *'
   workflow_dispatch:
     inputs:
       force:
