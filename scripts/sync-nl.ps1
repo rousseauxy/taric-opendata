@@ -3,10 +3,12 @@
 param(
     [string]$OutputFolder = "downloads/nl",
     [string]$Month        = (Get-Date -Format "yyyy-MM"),
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+$OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
 $ManifestUrl = "https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml"
@@ -45,7 +47,7 @@ foreach ($url in $urls) {
     $filename = ($url -split '[?#]')[0] | Split-Path -Leaf
     $outPath  = Join-Path $OutputFolder $filename
 
-    if ((Test-Path $outPath) -and -not $Force) {
+    if (-not $Force -and ($SkipFiles -contains $filename -or (Test-Path $outPath))) {
         Write-Host "Already exists: $filename"
         continue
     }

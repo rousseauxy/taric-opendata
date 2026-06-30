@@ -2,6 +2,11 @@ name: Sync Poland (ISZTAR4)
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-download even if already in the release'
+        type: boolean
+        default: false
   workflow_call:
 
 jobs:
@@ -14,9 +19,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get already-uploaded release assets
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="pl-$(date -u +%Y)"
+          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "assets=$assets" >> "$GITHUB_OUTPUT"
+          echo "Existing assets: $assets"
+
       - name: Download ISZTAR4 startup file
         shell: pwsh
-        run: scripts/sync-pl.ps1 -OutputFolder downloads/pl
+        run: |
+          $skipFiles = ('${{ steps.existing.outputs.assets }}' -split ',' | Where-Object { $_ -ne '' })
+          $params = @{ OutputFolder = 'downloads/pl'; SkipFiles = $skipFiles }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true; $params['SkipFiles'] = @() }
+          scripts/sync-pl.ps1 @params
 
       - name: Publish to release
         if: hashFiles('downloads/pl/*.zip') != ''

@@ -3,10 +3,12 @@
 param(
     [string]$OutputFolder = "downloads/be",
     [string]$SourceRepo   = "rousseauxy/tarbel-opendata",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+$OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
 $tag = (Get-Date -Format "yyyy-MM")
@@ -32,7 +34,7 @@ $downloaded = @()
 foreach ($asset in $release.assets) {
     $outPath = Join-Path $OutputFolder $asset.name
 
-    if ((Test-Path $outPath) -and -not $Force) {
+    if (-not $Force -and ($SkipFiles -contains $asset.name -or (Test-Path $outPath))) {
         Write-Host "Already exists: $($asset.name)"
         continue
     }

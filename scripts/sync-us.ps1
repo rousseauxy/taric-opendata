@@ -7,6 +7,7 @@
 # this script so the revision check works without a checkout of previous downloads.
 param(
     [string]$OutputFolder = "downloads/us",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 

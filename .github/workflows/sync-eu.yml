@@ -1,7 +1,15 @@
-name: Sync EU TARIC (CIRCABC)
+name: Sync EU TARIC (CIRCABC + Daily)
 
 on:
+  schedule:
+    # Run at 22:00 UTC (~midnight Brussels CEST); daily delta ZIPs are published around 19:15 UTC
+    - cron: '0 22 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-download even if already in the release'
+        type: boolean
+        default: false
   workflow_call:
 
 jobs:
@@ -9,30 +17,54 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download from CIRCABC (DG TAXUD)
+      - name: Get already-uploaded release assets
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="eu-$(date -u +%Y-%m)"
+          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "assets=$assets" >> "$GITHUB_OUTPUT"
+          echo "Existing assets: $assets"
+
+      - name: Download from CIRCABC and daily portal
         shell: pwsh
-        run: scripts/sync-eu.ps1 -OutputFolder downloads/eu
+        run: |
+          $force = '${{ github.event.inputs.force }}' -eq 'true'
+          $skipFiles = ('${{ steps.existing.outputs.assets }}' -split ',' | Where-Object { $_ -ne '' })
+          $params = @{ OutputFolder = 'downloads/eu'; SkipFiles = $skipFiles }
+          if ($force) { $params['Force'] = $true; $params['SkipFiles'] = @() }
+          scripts/sync-eu.ps1 @params
 
       - name: Publish to release
         if: hashFiles('downloads/eu/*.zip') != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TAG="${{ steps.existing.outputs.tag }}"
           YEAR=$(date -u +%Y)
           MONTH=$(date -u +%m)
-          TAG="eu-${YEAR}-${MONTH}"
 
           gh release view "$TAG" 2>/dev/null || \
             gh release create "$TAG" \
               --title "EU TARIC ${YEAR}-${MONTH}" \
-              --notes "Auto-synced from [CIRCABC (DG TAXUD)](https://circabc.europa.eu/ui/group/0e5f18c2-4b2f-42e9-aed4-dfe50ae1263b/library/64db9d0f-e7c9-4084-afe9-f47e70e53c10). Monthly XLSX extractions of the EU TARIC database published by European Commission DG TAXUD. Contains: nomenclature (EN/FR/DE), import/export duties, measures, conditions, exclusions, geographical areas, additional codes, exchange rates, legal basis."
+              --notes "Auto-synced from [CIRCABC (DG TAXUD)](https://circabc.europa.eu/ui/group/0e5f18c2-4b2f-42e9-aed4-dfe50ae1263b/library/64db9d0f-e7c9-4084-afe9-f47e70e53c10) and the [EC DDS2 daily portal](https://ec.europa.eu/taxation_customs/dds2/taric/daily_publications.jsp?Lang=en).
 
+          Monthly XLSX extractions (nomenclature, duties, measures, geographical areas, exchange rates, legal basis) plus daily delta ZIPs."
+
+          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/eu/*.zip; do
             name=$(basename "$f")
-            gh release upload "$TAG" "$f" --clobber
+            if echo "$EXISTING" | grep -qF "\"$name\""; then
+              echo "Already uploaded: $name"
+            else
+              echo "Uploading: $name"
+              gh release upload "$TAG" "$f"
+            fi
           done

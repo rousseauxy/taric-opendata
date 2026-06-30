@@ -4,6 +4,7 @@
 # Despite the .pgp extension, there is no encryption — we unpack to .xml.gz without any key.
 param(
     [string]$OutputFolder = "downloads/se",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
@@ -59,7 +60,7 @@ foreach ($fileName in $fileNames) {
     $outName = $fileName -replace '\.pgp$', ''   # strip .pgp → keep as .xml.gz
     $outPath = Join-Path $OutputFolder $outName
 
-    if (-not $Force -and (Test-Path $outPath)) {
+    if (-not $Force -and ($SkipFiles -contains $outName -or (Test-Path $outPath))) {
         $skipped += $outName
         Write-Host "Already exists: $outName"
         continue

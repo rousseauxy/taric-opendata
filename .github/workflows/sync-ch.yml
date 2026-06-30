@@ -2,6 +2,11 @@ name: Sync Switzerland (BAZG)
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-download even if already in the release'
+        type: boolean
+        default: false
   workflow_call:
 
 jobs:
@@ -15,7 +20,10 @@ jobs:
 
       - name: Download from BAZG datahub
         shell: pwsh
-        run: scripts/sync-ch.ps1 -OutputFolder downloads/ch
+        run: |
+          $params = @{ OutputFolder = 'downloads/ch' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-ch.ps1 @params
 
       - name: Publish to release
         if: hashFiles('downloads/ch/*.zip') != ''

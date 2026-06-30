@@ -4,6 +4,7 @@
 # Response is a ZIP (~220 MB) containing base-YYYYMMDDTHHMMSS.xml (~7.7 GB uncompressed).
 param(
     [string]$OutputFolder = "downloads/pl",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
@@ -14,6 +15,11 @@ New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 $PageUrl   = "https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions?lang=EN&date=$(Get-Date -Format 'yyyyMMdd')"
 $OutFile   = Join-Path $OutputFolder "isztar4-base.zip"
 $HashFile  = Join-Path $OutputFolder "isztar4-base.zip.sha256"
+
+if (-not $Force -and $SkipFiles -contains 'isztar4-base.zip') {
+    Write-Host "isztar4-base.zip already in release — skipping download."
+    exit 0
+}
 
 # Step 1: GET page — extract form action URL (contains jsessionid) and ViewState
 Write-Host "Loading ISZTAR4 XmlExtractions page..."

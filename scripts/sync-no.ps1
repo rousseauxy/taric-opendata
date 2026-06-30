@@ -2,10 +2,12 @@
 # Source: https://data.toll.no  —  Licence: CC BY 4.0
 param(
     [string]$OutputFolder = "downloads/no",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+$OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
 $CkanBase = "https://data.toll.no/api/3/action"
@@ -71,6 +73,11 @@ foreach ($id in $datasetIds) {
         $resName  = ($resource.name -replace '[^\w\-]', '_').ToLower()
         $filename = "$id-$resName.$ext"
         $outPath  = Join-Path $OutputFolder $filename
+
+        if (-not $Force -and $SkipFiles -contains $filename) {
+            Write-Host "Up to date (in release): $filename"
+            continue
+        }
 
         if ((Test-Path $outPath) -and -not $Force) {
             # Skip if local copy is at least as recent as the remote resource.

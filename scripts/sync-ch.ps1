@@ -4,6 +4,7 @@
 # Uses ETag headers to skip unchanged files on re-runs.
 param(
     [string]$OutputFolder = "downloads/ch",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 

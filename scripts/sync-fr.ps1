@@ -8,6 +8,7 @@
 #   3. exportNomencDroit for all CN chapters → zipped into RITA_NomencDroit.zip
 param(
     [string]$OutputFolder = "downloads/fr",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
@@ -37,7 +38,7 @@ $skipped    = @()
 
 foreach ($kv in $globalExports.GetEnumerator()) {
     $outPath = Join-Path $OutputFolder $kv.Value
-    if (-not $Force -and (Test-Path $outPath)) {
+    if (-not $Force -and ($SkipFiles -contains $kv.Value -or (Test-Path $outPath))) {
         Write-Host "Already exists: $($kv.Value)"
         $skipped += $kv.Value
         continue
@@ -67,52 +68,64 @@ $nomTmp      = Join-Path $OutputFolder "_nomenc_tmp"
 $nomDroitTmp = Join-Path $OutputFolder "_nomecdroit_tmp"
 $nomZip      = Join-Path $OutputFolder "RITA_Nomenc.zip"
 $nomDroitZip = Join-Path $OutputFolder "RITA_NomencDroit.zip"
-New-Item -ItemType Directory -Force -Path $nomTmp      | Out-Null
-New-Item -ItemType Directory -Force -Path $nomDroitTmp | Out-Null
 
-$nomCount = 0; $droitCount = 0
-foreach ($chp in $chapters) {
-    Write-Host "  Chapter $chp..." -NoNewline
-    try {
-        # exportNomenc — CN structure + descriptions (chapitreCritere, no 'D')
-        $r1 = Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
-            -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritere.code=$chp&exportNomenc=T%C3%A9l%C3%A9charger" `
-            -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
-        if ($r1.Content -notmatch 'Aucune donn|Fichier non|erreur interne') {
-            Set-Content -Path (Join-Path $nomTmp "RITA_Nomenc_CHP$chp.xml") -Value $r1.Content -Encoding UTF8 -NoNewline
-            $nomCount++
-        }
+$skipNomenc      = -not $Force -and $SkipFiles -contains 'RITA_Nomenc.zip'
+$skipNomencDroit = -not $Force -and $SkipFiles -contains 'RITA_NomencDroit.zip'
+if ($skipNomenc)      { Write-Host "RITA_Nomenc.zip already in release — skipping."; $skipped += 'RITA_Nomenc.zip' }
+if ($skipNomencDroit) { Write-Host "RITA_NomencDroit.zip already in release — skipping."; $skipped += 'RITA_NomencDroit.zip' }
 
-        # exportNomencDroit — CN structure + French duty rates (chapitreCritereD, with 'D')
-        $r2 = Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
-            -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritereD.code=$chp&exportNomencDroit=T%C3%A9l%C3%A9charger" `
-            -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
-        if ($r2.Content -notmatch 'Aucune donn|Fichier non|erreur interne') {
-            Set-Content -Path (Join-Path $nomDroitTmp "RITA_NomencDroit_CHP$chp.xml") -Value $r2.Content -Encoding UTF8 -NoNewline
-            $droitCount++
-        }
+if (-not ($skipNomenc -and $skipNomencDroit)) {
+    New-Item -ItemType Directory -Force -Path $nomTmp      | Out-Null
+    New-Item -ItemType Directory -Force -Path $nomDroitTmp | Out-Null
 
-        $k1 = if ($nomCount -gt 0) { [math]::Round((Get-Item (Join-Path $nomTmp "RITA_Nomenc_CHP$chp.xml")).Length / 1KB) } else { 0 }
-        $k2 = if ($droitCount -gt 0) { [math]::Round((Get-Item (Join-Path $nomDroitTmp "RITA_NomencDroit_CHP$chp.xml")).Length / 1KB) } else { 0 }
-        Write-Host " nomenc=$k1 KB, droit=$k2 KB"
-    } catch { Write-Host " FAILED: $_" }
+    $nomCount = 0; $droitCount = 0
+    foreach ($chp in $chapters) {
+        Write-Host "  Chapter $chp..." -NoNewline
+        try {
+            if (-not $skipNomenc) {
+                # exportNomenc — CN structure + descriptions (chapitreCritere, no 'D')
+                $r1 = Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
+                    -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritere.code=$chp&exportNomenc=T%C3%A9l%C3%A9charger" `
+                    -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+                if ($r1.Content -notmatch 'Aucune donn|Fichier non|erreur interne') {
+                    Set-Content -Path (Join-Path $nomTmp "RITA_Nomenc_CHP$chp.xml") -Value $r1.Content -Encoding UTF8 -NoNewline
+                    $nomCount++
+                }
+            }
+
+            if (-not $skipNomencDroit) {
+                # exportNomencDroit — CN structure + French duty rates (chapitreCritereD, with 'D')
+                $r2 = Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
+                    -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritereD.code=$chp&exportNomencDroit=T%C3%A9l%C3%A9charger" `
+                    -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+                if ($r2.Content -notmatch 'Aucune donn|Fichier non|erreur interne') {
+                    Set-Content -Path (Join-Path $nomDroitTmp "RITA_NomencDroit_CHP$chp.xml") -Value $r2.Content -Encoding UTF8 -NoNewline
+                    $droitCount++
+                }
+            }
+
+            $k1 = if (-not $skipNomenc -and $nomCount -gt 0)      { [math]::Round((Get-Item (Join-Path $nomTmp      "RITA_Nomenc_CHP$chp.xml")).Length / 1KB) } else { '-' }
+            $k2 = if (-not $skipNomencDroit -and $droitCount -gt 0) { [math]::Round((Get-Item (Join-Path $nomDroitTmp "RITA_NomencDroit_CHP$chp.xml")).Length / 1KB) } else { '-' }
+            Write-Host " nomenc=$k1 KB, droit=$k2 KB"
+        } catch { Write-Host " FAILED: $_" }
+    }
+
+    if ($nomCount -gt 0) {
+        if (Test-Path $nomZip) { Remove-Item $nomZip }
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($nomTmp, $nomZip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+        $downloaded += "RITA_Nomenc.zip"
+        Write-Host "Zipped $nomCount chapters → RITA_Nomenc.zip ($([math]::Round((Get-Item $nomZip).Length / 1MB, 1)) MB)"
+    }
+    if ($droitCount -gt 0) {
+        if (Test-Path $nomDroitZip) { Remove-Item $nomDroitZip }
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($nomDroitTmp, $nomDroitZip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+        $downloaded += "RITA_NomencDroit.zip"
+        Write-Host "Zipped $droitCount chapters → RITA_NomencDroit.zip ($([math]::Round((Get-Item $nomDroitZip).Length / 1MB, 1)) MB)"
+    }
+
+    Remove-Item $nomTmp      -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $nomDroitTmp -Recurse -Force -ErrorAction SilentlyContinue
 }
-
-if ($nomCount -gt 0) {
-    if (Test-Path $nomZip) { Remove-Item $nomZip }
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($nomTmp, $nomZip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
-    $downloaded += "RITA_Nomenc.zip"
-    Write-Host "Zipped $nomCount chapters → RITA_Nomenc.zip ($([math]::Round((Get-Item $nomZip).Length / 1MB, 1)) MB)"
-}
-if ($droitCount -gt 0) {
-    if (Test-Path $nomDroitZip) { Remove-Item $nomDroitZip }
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($nomDroitTmp, $nomDroitZip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
-    $downloaded += "RITA_NomencDroit.zip"
-    Write-Host "Zipped $droitCount chapters → RITA_NomencDroit.zip ($([math]::Round((Get-Item $nomDroitZip).Length / 1MB, 1)) MB)"
-}
-
-Remove-Item $nomTmp      -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $nomDroitTmp -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "Downloaded: $($downloaded.Count) file(s)"

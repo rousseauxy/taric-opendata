@@ -2,6 +2,11 @@ name: Sync US HTS (USITC)
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-download even if already in the release'
+        type: boolean
+        default: false
   workflow_call:
 
 jobs:
@@ -24,7 +29,10 @@ jobs:
 
       - name: Download from USITC
         shell: pwsh
-        run: scripts/sync-us.ps1 -OutputFolder downloads/us
+        run: |
+          $params = @{ OutputFolder = 'downloads/us' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-us.ps1 @params
 
       - name: Publish to release
         if: hashFiles('downloads/us/hts-us.json') != ''

@@ -2,10 +2,12 @@
 # Source: https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01
 param(
     [string]$OutputFolder = "downloads/gb",
+    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
+$OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
 $ApiBase  = "https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01"
@@ -102,7 +104,7 @@ foreach ($table in $tables) {
     $filename = "$table-$versionId.csv"
     $outPath  = Join-Path $OutputFolder $filename
 
-    if ((Test-Path $outPath) -and -not $Force) {
+    if (-not $Force -and ($SkipFiles -contains $filename -or (Test-Path $outPath))) {
         Write-Host "Already exists: $filename"
         continue
     }

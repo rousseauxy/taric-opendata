@@ -2,6 +2,11 @@ name: Sync Netherlands (DTV)
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-download even if already in the release'
+        type: boolean
+        default: false
   workflow_call:
 
 jobs:
@@ -13,9 +18,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get already-uploaded release assets
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="nl-$(date -u +%Y-%m)"
+          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "assets=$assets" >> "$GITHUB_OUTPUT"
+          echo "Existing assets: $assets"
+
       - name: Download from Belastingdienst DTV
         shell: pwsh
-        run: scripts/sync-nl.ps1 -OutputFolder downloads/nl
+        run: |
+          $skipFiles = ('${{ steps.existing.outputs.assets }}' -split ',' | Where-Object { $_ -ne '' })
+          $params = @{ OutputFolder = 'downloads/nl'; SkipFiles = $skipFiles }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true; $params['SkipFiles'] = @() }
+          scripts/sync-nl.ps1 @params
 
       - name: Publish to release
         if: hashFiles('downloads/nl/*') != ''
