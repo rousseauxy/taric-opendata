@@ -1,0 +1,56 @@
+name: Sync EUR-Lex legislation (metadata)
+
+on:
+  workflow_dispatch:
+    inputs:
+      directoryCodePrefix:
+        description: 'EU legal-act directory-code prefix (0230 = CCT application)'
+        type: string
+        default: '0230'
+      force:
+        description: 'Rebuild even if unchanged'
+        type: boolean
+        default: false
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stored version marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/eurlex
+          MONTH=$(date -u +%Y-%m)
+          gh release download "eurlex-$MONTH" --pattern "eurlex-version.txt" --dir downloads/eurlex 2>/dev/null || true
+
+      - name: Build manifest from CELLAR SPARQL
+        shell: pwsh
+        run: |
+          $params = @{ OutputFolder = 'downloads/eurlex'; DirectoryCodePrefix = '${{ inputs.directoryCodePrefix || '0230' }}' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-eurlex-meta.ps1 @params
+
+      - name: Publish to release
+        if: hashFiles('downloads/eurlex/eurlex-manifest.csv') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MONTH=$(date -u +%Y-%m)
+          TAG="eurlex-$MONTH"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "EU customs legislation $MONTH" \
+              --notes "Auto-synced from the EU Publications Office [CELLAR](http://publications.europa.eu/webapi/rdf/sparql) SPARQL endpoint. Metadata manifest of EU legal acts under the Common Customs Tariff directory codes (0230*): CELEX, title, Official Journal id, document/validity dates, in-force flag, resource type, ELI, and directory codes. Full text is published separately (manually) via the *full* workflow. Metadata updated daily when the work set changes."
+
+          gh release upload "$TAG" downloads/eurlex/eurlex-manifest.csv  --clobber
+          gh release upload "$TAG" downloads/eurlex/eurlex-manifest.json --clobber
+          gh release upload "$TAG" downloads/eurlex/eurlex-version.txt   --clobber

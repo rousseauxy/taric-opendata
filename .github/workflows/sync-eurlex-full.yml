@@ -1,0 +1,55 @@
+name: Sync EUR-Lex legislation (full text)
+
+# MANUAL ONLY — heavy (thousands of requests, hundreds of MB). Deliberately not part
+# of Sync All. Reads the manifest published by the metadata workflow and fetches +
+# zips full text per language.
+
+on:
+  workflow_dispatch:
+    inputs:
+      languages:
+        description: 'Comma-separated ISO 639-3 languages (e.g. ENG or ENG,NLD)'
+        type: string
+        default: 'ENG'
+      limit:
+        description: 'Cap number of works (0 = all; use a small value to test)'
+        type: string
+        default: '0'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 300
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download manifest from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/eurlex
+          MONTH=$(date -u +%Y-%m)
+          gh release download "eurlex-$MONTH" --pattern "eurlex-manifest.csv" --dir downloads/eurlex
+
+      - name: Download full text and zip
+        shell: pwsh
+        run: |
+          $langs = '${{ inputs.languages }}'.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+          $params = @{ OutputFolder = 'downloads/eurlex'; Languages = $langs; Limit = [int]'${{ inputs.limit }}' }
+          scripts/sync-eurlex-full.ps1 @params
+
+      - name: Publish full-text zips to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MONTH=$(date -u +%Y-%m)
+          TAG="eurlex-$MONTH"
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" --title "EU customs legislation $MONTH" \
+              --notes "EU customs legislation from CELLAR."
+          for f in downloads/eurlex/eurlex-text-*.zip; do
+            [ -e "$f" ] && gh release upload "$TAG" "$f" --clobber
+          done

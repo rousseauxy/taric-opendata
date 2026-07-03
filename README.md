@@ -2,20 +2,28 @@
 
 Automated mirrors of customs tariff data from multiple jurisdictions, published as GitHub Release assets for machine-readable HTTP access without portal navigation.
 
+[![Sync All Countries](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-all.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-all.yml)
+
 ## Countries
 
-| Code | Jurisdiction | Source | Format | Release Tag |
-|------|-------------|--------|--------|-------------|
-| `be` | Belgium | [minfin Tarbel](https://github.com/rousseauxy/tarbel-opendata) | ZIP/XML | `be-YYYY-MM` |
-| `nl` | Netherlands | [Belastingdienst DTV](https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml) | ZIP/XML | `nl-YYYY-MM` |
-| `gb` | United Kingdom | [data.api.trade.gov.uk](https://data.api.trade.gov.uk/) | CSV | `gb-YYYY-MM` |
-| `no` | Norway | [data.toll.no](https://data.toll.no/dataset/customstariffstructure) | XML/JSON | `no-YYYY-MM` |
-| `eu` | European Union | [CIRCABC (DG TAXUD)](https://circabc.europa.eu/) | ZIP/XML | `eu-YYYY-MM` |
-| `se` | Sweden | [Tullverket Tulltaxan](https://www.tullverket.se/) | ZIP/XML | `se-YYYY-MM` |
-| `ch` | Switzerland | [BAZG datahub](https://www.bazg.admin.ch/) | ZIP/XML | `ch-YYYY-MM` |
-| `pl` | Poland | [ISZTAR4](https://www.podatki.gov.pl/) | ZIP | `pl-YYYY` |
-| `fr` | France | [RITA (Douane FR)](https://www.douane.gouv.fr/) | ZIP/XML | `fr-YYYY-MM` |
-| `us` | United States | [USITC HTS](https://hts.usitc.gov/) | JSON/CSV | `us-YYYY` |
+The **Status** badge shows each source's last workflow run. Sources are driven daily by
+**Sync All** (22:00 UTC); the per-source badges reflect each workflow's own runs (e.g. manual
+re-syncs). EUR-Lex full text is manual-only and excluded from the daily run.
+
+| Code | Jurisdiction | Source | Format | Release Tag | Status |
+|------|-------------|--------|--------|-------------|--------|
+| `be` | Belgium | [minfin Tarbel](https://github.com/rousseauxy/tarbel-opendata) | ZIP/XML | `be-YYYY-MM` | [![be](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be.yml) |
+| `nl` | Netherlands | [Belastingdienst DTV](https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml) | ZIP/XML | `nl-YYYY-MM` | [![nl](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-nl.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-nl.yml) |
+| `gb` | United Kingdom | [data.api.trade.gov.uk](https://data.api.trade.gov.uk/) | CSV | `gb-YYYY-MM` | [![gb](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-gb.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-gb.yml) |
+| `no` | Norway | [data.toll.no](https://data.toll.no/dataset/customstariffstructure) | XML/JSON | `no-YYYY-MM` | [![no](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-no.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-no.yml) |
+| `eu` | European Union | [CIRCABC (DG TAXUD)](https://circabc.europa.eu/) | ZIP/XML | `eu-YYYY-MM` | [![eu](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eu.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eu.yml) |
+| `se` | Sweden | [Tullverket Tulltaxan](https://www.tullverket.se/) | ZIP/XML | `se-YYYY-MM` | [![se](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-se.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-se.yml) |
+| `ch` | Switzerland | [BAZG datahub](https://www.bazg.admin.ch/) | ZIP/XML | `ch-YYYY-MM` | [![ch](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ch.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ch.yml) |
+| `pl` | Poland | [ISZTAR4](https://www.podatki.gov.pl/) | ZIP | `pl-YYYY` | [![pl](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-pl.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-pl.yml) |
+| `fr` | France | [RITA (Douane FR)](https://www.douane.gouv.fr/) | ZIP/XML | `fr-YYYY-MM` | [![fr](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-fr.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-fr.yml) |
+| `us` | United States | [USITC HTS](https://hts.usitc.gov/) | JSON/CSV | `us-YYYY` | [![us](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-us.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-us.yml) |
+| `ebti` | EU (BTI) | [DDS2 EBTI](https://ec.europa.eu/taxation_customs/dds2/ebti/) | ZIP/CSV | `ebti-YYYY` | [![ebti](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml) |
+| `eurlex` | EU (legislation) | [CELLAR SPARQL](http://publications.europa.eu/webapi/rdf/sparql) | CSV/JSON (+ZIP) | `eurlex-YYYY-MM` | [![eurlex](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml) |
 
 ## Data Contents
 
@@ -65,6 +73,21 @@ Harmonized Tariff Schedule of the United States published by USITC. Updated per 
 - `hts-us.json` — full HTS in structured JSON (chapters 01–99)
 - `hts-us.csv` — same data as flat CSV
 - `hts-version.json` — version/revision marker
+
+### EU legislation (`eurlex`)
+EU customs legislation sourced from the Publications Office **CELLAR** repository via its
+public SPARQL endpoint (the sanctioned machine interface — `eur-lex.europa.eu`'s HTML frontend
+is WAF-protected). Scope is EU legal acts under the Common Customs Tariff directory codes
+(`0230*`: tariff derogations, suspensions, quotas). Split into a daily **metadata** sync and a
+manual **full-text** sync.
+- `eurlex-manifest.csv` / `.json` — one row per act: CELEX, title, Official Journal id,
+  document/entry-into-force/end-of-validity dates, in-force flag, resource type, ELI,
+  directory codes. Deep-link to EUR-Lex via `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:{CELEX}`.
+- `eurlex-version.txt` — change-detection sentinel (work count + max document date).
+- `eurlex-text-{lang}.zip` — **manual only** (`Sync EUR-Lex legislation (full text)` workflow).
+  Per-CELEX HTML full text, one language per zip. HTML compresses ~20–25×, so the whole
+  chapter stays well under GitHub's 2 GB per-asset limit. Older acts with no HTML manifestation
+  (PDF/scan only) are skipped.
 
 ## Usage
 
