@@ -1,6 +1,8 @@
 name: Sync Belgium (Tarbel)
 
 on:
+  schedule:
+    - cron: '0 22 * * *'
   workflow_dispatch:
     inputs:
       force:

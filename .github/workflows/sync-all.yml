@@ -1,8 +1,10 @@
 name: Sync All Countries
 
+# Manual "run everything now" convenience. Each source has its own daily schedule
+# (staggered around 22:00 UTC) so its status badge reflects real runs; this workflow
+# is not scheduled to avoid double-running.
+
 on:
-  schedule:
-    - cron: '0 22 * * *'
   workflow_dispatch:
 
 permissions:

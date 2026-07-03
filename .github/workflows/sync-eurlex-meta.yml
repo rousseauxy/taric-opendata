@@ -1,6 +1,8 @@
 name: Sync EUR-Lex legislation (metadata)
 
 on:
+  schedule:
+    - cron: '55 22 * * *'
   workflow_dispatch:
     inputs:
       directoryCodePrefix:

@@ -1,6 +1,8 @@
 name: Sync Sweden (Tulltaxan)
 
 on:
+  schedule:
+    - cron: '25 22 * * *'
   workflow_dispatch:
     inputs:
       force:
