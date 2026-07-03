@@ -24,7 +24,7 @@ once. EUR-Lex full text is manual-only and excluded from the daily schedule.
 | `fr` | France | [RITA (Douane FR)](https://www.douane.gouv.fr/) | ZIP/XML | `fr-YYYY-MM` | [![fr](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-fr.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-fr.yml) |
 | `us` | United States | [USITC HTS](https://hts.usitc.gov/) | JSON/CSV | `us-YYYY` | [![us](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-us.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-us.yml) |
 | `ebti` | EU (BTI) | [DDS2 EBTI](https://ec.europa.eu/taxation_customs/dds2/ebti/) | ZIP/CSV | `ebti-YYYY` | [![ebti](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml) |
-| `eurlex` | EU (legislation) | [CELLAR SPARQL](http://publications.europa.eu/webapi/rdf/sparql) | CSV/JSON (+ZIP) | `eurlex-YYYY-MM` | [![eurlex](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml) |
+| `eurlex` | EU (legislation) | [CELLAR SPARQL](http://publications.europa.eu/webapi/rdf/sparql) | CSV (+ZIP) | `eurlex-YYYY-MM` | [![eurlex](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml) |
 
 ## Data Contents
 
@@ -79,19 +79,23 @@ Harmonized Tariff Schedule of the United States published by USITC. Updated per 
 - `hts-version.json` — version/revision marker
 
 ### EU legislation (`eurlex`)
-EU customs legislation sourced from the Publications Office **CELLAR** repository via its
+EU secondary legislation sourced from the Publications Office **CELLAR** repository via its
 public SPARQL endpoint (the sanctioned machine interface — `eur-lex.europa.eu`'s HTML frontend
-is WAF-protected). Scope is EU legal acts under the Common Customs Tariff directory codes
-(`0230*`: tariff derogations, suspensions, quotas). Split into a daily **metadata** sync and a
-manual **full-text** sync.
-- `eurlex-manifest.csv` / `.json` — one row per act: CELEX, title, Official Journal id,
-  document/entry-into-force/end-of-validity dates, in-force flag, resource type, ELI,
-  directory codes. Deep-link to EUR-Lex via `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:{CELEX}`.
+is WAF-protected). Scope is **all of CELEX sector 3** — regulations, directives and decisions
+(~233k acts). This covers every regulation a TARIC measure can reference (a
+`GeneratingRegulationId` always maps to a sector-3 CELEX), so consumers join locally on CELEX
+without any per-code lookup against CELLAR. Split into a daily **metadata** sync and a manual
+**full-text** sync.
+- `eurlex-manifest.csv` — one row per act (~233k, ~85 MB): CELEX, title, Official Journal id,
+  document/entry-into-force/end-of-validity dates, in-force flag, resource type, ELI, and
+  legal-act directory codes. Deep-link to EUR-Lex via
+  `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:{CELEX}`.
+  Enumeration is partitioned by CELEX year to keep each SPARQL query small.
 - `eurlex-version.txt` — change-detection sentinel (work count + max document date).
 - `eurlex-text-{lang}.zip` — **manual only** (`Sync EUR-Lex legislation (full text)` workflow).
-  Per-CELEX HTML full text, one language per zip. HTML compresses ~20–25×, so the whole
-  chapter stays well under GitHub's 2 GB per-asset limit. Older acts with no HTML manifestation
-  (PDF/scan only) are skipped.
+  Per-CELEX HTML full text, one language per zip. Use the `limit`/a filtered manifest — running
+  full text over all ~233k acts is impractical (tens of GB). Older acts with no HTML
+  manifestation (PDF/scan only) are skipped.
 
 ## Usage
 
