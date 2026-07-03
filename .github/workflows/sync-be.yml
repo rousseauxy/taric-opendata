@@ -31,7 +31,7 @@ jobs:
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
 
-      - name: Mirror from tarbel-opendata
+      - name: Download from minfin (TARBEL)
         shell: pwsh
         run: |
           $skipFiles = ('${{ steps.existing.outputs.assets }}' -split ',' | Where-Object { $_ -ne '' })
@@ -49,7 +49,7 @@ jobs:
           gh release view "$TAG" 2>/dev/null || \
             gh release create "$TAG" \
               --title "Belgium Tarbel ${TAG}" \
-              --notes "Auto-mirrored from [tarbel-opendata](https://github.com/rousseauxy/tarbel-opendata). Contains EU TARIC + Belgian national measures (BTW, RBT, accijnzen)."
+              --notes "Scraped directly from the Belgian minfin [TARBEL portal](https://eservices.minfin.fgov.be/extTariffBrowser/XmlExtractions). Contains EU TARIC + Belgian national measures (BTW, RBT, accijnzen): one full extraction on the 1st of the month + daily deltas, plus XML schema docs and currency rates."
 
           EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/be/*; do

@@ -13,7 +13,7 @@ daily schedule.
 
 | Code | Jurisdiction | Source | Format | Release Tag | Status |
 |------|-------------|--------|--------|-------------|--------|
-| `be` | Belgium | [minfin Tarbel](https://github.com/rousseauxy/tarbel-opendata) | ZIP/XML | `be-YYYY-MM` | [![be](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be.yml) |
+| `be` | Belgium | [minfin TARBEL](https://eservices.minfin.fgov.be/extTariffBrowser/XmlExtractions) | ZIP/XML | `be-YYYY-MM` | [![be](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be.yml) |
 | `nl` | Netherlands | [Belastingdienst DTV](https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml) | ZIP/XML | `nl-YYYY-MM` | [![nl](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-nl.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-nl.yml) |
 | `gb` | United Kingdom | [data.api.trade.gov.uk](https://data.api.trade.gov.uk/) | CSV | `gb-YYYY-MM` | [![gb](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-gb.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-gb.yml) |
 | `no` | Norway | [data.toll.no](https://data.toll.no/dataset/customstariffstructure) | XML/JSON | `no-YYYY-MM` | [![no](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-no.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-no.yml) |
@@ -29,9 +29,12 @@ daily schedule.
 ## Data Contents
 
 ### Belgium (`be`)
-EU TARIC + Belgian national measures (BTW, RBT, accijnzen). Sourced via [tarbel-opendata](https://github.com/rousseauxy/tarbel-opendata).
-- `export-{date}-{date}.zip` — full monthly extraction
+EU TARIC + Belgian national measures (BTW, RBT, accijnzen). Scraped directly from the minfin
+TARBEL JSF portal (see `scripts/sync-be.ps1`).
+- `export-{date}-{date}.zip` — full monthly extraction (~1st of month)
 - `export-{date}_{date}-{date}.zip` — daily delta
+- `XML-Document.zip` — XML schema documentation
+- `listed_currencies.xlsx` — currency rates
 
 ### Netherlands (`nl`)
 EU TARIC + Dutch national measures (BTW, accijns). Sourced from the Belastingdienst DTV bulk download manifest. Arctic Group Tariff XML format.
@@ -108,7 +111,12 @@ gh release download "us-$(date +%Y)" --repo rousseauxy/taric-opendata --dir ./us
 
 ## Relationship to tarbel-opendata
 
-Belgian data (`be`) is sourced from [tarbel-opendata](https://github.com/rousseauxy/tarbel-opendata), which handles the complex minfin portal scraping. This repo mirrors it alongside all other jurisdictions under a unified `{country}-YYYY-MM` release scheme.
+Belgian data (`be`) is scraped directly from the minfin TARBEL portal by `scripts/sync-be.ps1`,
+which carries the same JSF scraping logic as the standalone
+[tarbel-opendata](https://github.com/rousseauxy/tarbel-opendata) repo. taric-opendata no longer
+mirrors tarbel-opendata's releases — both run the same scraper independently. tarbel-opendata
+remains as a Belgium-only mirror; this repo publishes `be` alongside all other jurisdictions
+under the unified `{country}-YYYY-MM` release scheme.
 
 ## Related projects
 
