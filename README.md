@@ -7,9 +7,9 @@ Automated mirrors of customs tariff data from multiple jurisdictions, published 
 ## Countries
 
 The **Status** badge shows each source's last daily run. Each source runs on its own schedule
-(staggered around 22:00 UTC), so its badge reflects a real run. **Sync All** is a manual
-convenience to run everything at once. EUR-Lex full text is manual-only and excluded from the
-daily schedule.
+(staggered through the 22:00–23:45 UTC window; `be` runs last, after minfin's nightly publish),
+so its badge reflects a real run. **Sync All** is a manual convenience to run everything at
+once. EUR-Lex full text is manual-only and excluded from the daily schedule.
 
 | Code | Jurisdiction | Source | Format | Release Tag | Status |
 |------|-------------|--------|--------|-------------|--------|

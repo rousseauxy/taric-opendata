@@ -2,7 +2,9 @@ name: Sync Belgium (Tarbel)
 
 on:
   schedule:
-    - cron: '0 22 * * *'
+    # 23:45 UTC = 01:45 CEST / 00:45 CET — safely after minfin publishes (~00:05 CEST)
+    # so the same-day delta is available. Later than the other sources by design.
+    - cron: '45 23 * * *'
   workflow_dispatch:
     inputs:
       force:
