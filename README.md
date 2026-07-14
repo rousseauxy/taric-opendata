@@ -9,7 +9,8 @@ Automated mirrors of customs tariff data from multiple jurisdictions, published 
 The **Status** badge shows each source's last daily run. Each source runs on its own schedule
 (staggered through the 22:00–23:45 UTC window; `be` runs last, after minfin's nightly publish),
 so its badge reflects a real run. **Sync All** is a manual convenience to run everything at
-once. EUR-Lex full text is manual-only and excluded from the daily schedule.
+once. EUR-Lex full text is manual-only; `atar` runs weekly (Mondays) as it is a heavy scrape;
+both are excluded from the daily window.
 
 | Code | Jurisdiction | Source | Format | Release Tag | Status |
 |------|-------------|--------|--------|-------------|--------|
@@ -25,6 +26,7 @@ once. EUR-Lex full text is manual-only and excluded from the daily schedule.
 | `us` | United States | [USITC HTS](https://hts.usitc.gov/) | JSON/CSV | `us-YYYY` | [![us](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-us.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-us.yml) |
 | `ebti` | EU (BTI) | [DDS2 EBTI](https://ec.europa.eu/taxation_customs/dds2/ebti/) | ZIP/CSV | `ebti-YYYY` | [![ebti](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml) |
 | `eurlex` | EU (legislation) | [CELLAR SPARQL](http://publications.europa.eu/webapi/rdf/sparql) | CSV (+ZIP) | `eurlex-YYYY-MM` | [![eurlex](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml) |
+| `atar` | UK (rulings) | [GOV.UK ATaR](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) | CSV | `atar-YYYY-MM` | [![atar](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml) |
 
 ## Data Contents
 
@@ -92,10 +94,25 @@ without any per-code lookup against CELLAR. Split into a daily **metadata** sync
   `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:{CELEX}`.
   Enumeration is partitioned by CELEX year to keep each SPARQL query small.
 - `eurlex-version.txt` — change-detection sentinel (work count + max document date).
+- `cnen-en.html` — the **consolidated CN Explanatory Notes (CNEN)**, English (CELEX
+  `02019XC0329(02)`, latest consolidation resolved via CELLAR). Published by the daily metadata
+  sync with its own `cnen-version.txt` sentinel, so it refreshes independently of the manifest.
+  Notes are keyed by CN chapter/heading/subheading.
 - `eurlex-text-{lang}.zip` — **manual only** (`Sync EUR-Lex legislation (full text)` workflow).
   Per-CELEX HTML full text, one language per zip. Use the `limit`/a filtered manifest — running
   full text over all ~233k acts is impractical (tens of GB). Older acts with no HTML
   manifestation (PDF/scan only) are skipped.
+
+### UK Advance Tariff Rulings (`atar`)
+The GB analogue of EU BTIs, scraped from the GOV.UK **Search for Advance Tariff Rulings**
+service (Open Government Licence). Unlike the GB tariff (`gb`, a CSV API) there is no bulk/API
+feed, so the ruling pages are scraped: paginated enumeration of the search results
+(`/search?page=N`, 25 rulings/page) then a per-ruling parse of each `/ruling/{id}` page. Runs
+**weekly** (heavy scrape); change detection on the total ruling count makes an unchanged run a
+fast no-op.
+- `atar.csv` — one row per ruling: reference, commodity code, start/expiry dates, goods
+  description, keywords, and grounds for classification.
+- `atar-version.txt` — change-detection sentinel (total ruling count).
 
 ## Usage
 

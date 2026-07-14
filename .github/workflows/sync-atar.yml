@@ -1,0 +1,56 @@
+name: Sync UK Advance Tariff Rulings (ATaR)
+
+# Heavy HTML scrape of the GOV.UK ATaR service (~6.6k ruling pages). Weekly, off the
+# daily 22:00 slot other sources use. Change detection (total ruling count) makes most
+# runs a fast no-op; a full re-scrape only happens when the count changes.
+on:
+  schedule:
+    - cron: '30 3 * * 1'   # Mondays 03:30 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-scrape even if the ruling count is unchanged'
+        type: boolean
+        default: false
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stored version marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/atar
+          MONTH=$(date -u +%Y-%m)
+          gh release download "atar-$MONTH" --pattern "atar-version.txt" --dir downloads/atar 2>/dev/null || true
+
+      - name: Scrape UK ATaR
+        shell: pwsh
+        run: |
+          $params = @{ OutputFolder = 'downloads/atar' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-atar.ps1 @params
+
+      - name: Publish to release
+        if: hashFiles('downloads/atar/atar.csv') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MONTH=$(date -u +%Y-%m)
+          TAG="atar-$MONTH"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "UK Advance Tariff Rulings (ATaR) $MONTH" \
+              --notes "Auto-scraped from the GOV.UK [Search for Advance Tariff Rulings](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) service (Open Government Licence). The GB analogue of EU BTIs: ruling reference, commodity code, validity dates, goods description, keywords, and grounds for classification."
+
+          gh release upload "$TAG" downloads/atar/atar.csv --clobber
+          gh release upload "$TAG" downloads/atar/atar-version.txt --clobber
