@@ -68,11 +68,29 @@ try {
     Write-Host "  chapter files: $n"
     if ($n -eq 0) { throw "No TGTC nomenclature chapter files ('NN fasıl') found in the zip." }
 
+    # Chapter/section legal notes live in a sibling folder as "Fasıl N.xls" (name starts with
+    # "Fas", not a chapter number) — collect them separately for the notes parser.
+    $notesDir = Join-Path $tmp "notes"; New-Item -ItemType Directory -Force -Path $notesDir | Out-Null
+    $nn = 0
+    Get-ChildItem -Path $ex -Recurse -Filter *.xls |
+        Where-Object { $_.Name -match '^Fas.+\s\d+\.xls$' } |
+        ForEach-Object { Copy-Item $_.FullName (Join-Path $notesDir $_.Name) -Force; $nn++ }
+    Write-Host "  chapter-note files: $nn"
+
     # ─── Parse (Python + xlrd) ────────────────────────────────────────────────
     & $py -m pip install --quiet --disable-pip-version-check xlrd 2>&1 | Out-Null
     $csv = Join-Path $OutputFolder "tr-nomenclature.csv"
     & $py (Join-Path $PSScriptRoot "parse-tgtc.py") $flat $csv
     if (-not (Test-Path $csv) -or (Get-Item $csv).Length -lt 100) { throw "parse-tgtc.py produced no usable output." }
+
+    # Section/chapter notes → tr-notes.csv (non-fatal: nomenclature is the critical output).
+    $notesCsv = Join-Path $OutputFolder "tr-notes.csv"
+    if ($nn -gt 0) {
+        & $py (Join-Path $PSScriptRoot "parse-tgtc-notes.py") $notesDir $notesCsv
+        if ((Test-Path $notesCsv) -and (Get-Item $notesCsv).Length -gt 50) {
+            Write-Host "Wrote tr-notes.csv ($([math]::Round((Get-Item $notesCsv).Length / 1KB, 0)) KB)"
+        } else { Write-Warning "parse-tgtc-notes.py produced no usable output." }
+    } else { Write-Warning "No chapter-note files found — skipping tr-notes.csv." }
 
     $zipUrl | Set-Content $sentinel -NoNewline
     Write-Host "Wrote tr-nomenclature.csv ($([math]::Round((Get-Item $csv).Length / 1KB, 0)) KB)"

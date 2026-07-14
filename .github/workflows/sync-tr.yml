@@ -55,7 +55,8 @@ jobs:
           gh release view "$TAG" 2>/dev/null || \
             gh release create "$TAG" \
               --title "Turkish Customs Tariff (TGTC) $YEAR" \
-              --notes "Auto-synced from the Turkish Ministry of Trade ([ggm.ticaret.gov.tr](https://ggm.ticaret.gov.tr)). Nomenclature of the İstatistik Pozisyonlarına Bölünmüş Türk Gümrük Tarife Cetveli: 12-digit GTİP codes, Turkish descriptions, units of measure and the base (474) duty rate. GTİP digits 1-8 = HS6 + EU CN, so consumers can borrow EU CN descriptions for the aligned levels."
+              --notes "Auto-synced from the Turkish Ministry of Trade ([ggm.ticaret.gov.tr](https://ggm.ticaret.gov.tr)). Nomenclature of the İstatistik Pozisyonlarına Bölünmüş Türk Gümrük Tarife Cetveli: 12-digit GTİP codes, Turkish descriptions, units of measure and the base (474) duty rate (tr-nomenclature.csv), plus the binding Section/Chapter legal notes (tr-notes.csv). GTİP digits 1-8 = HS6 + EU CN, so consumers can borrow EU CN descriptions for the aligned levels."
 
           gh release upload "$TAG" downloads/tr/tr-nomenclature.csv --clobber
           gh release upload "$TAG" downloads/tr/tr-version.txt --clobber
+          [ -f downloads/tr/tr-notes.csv ] && gh release upload "$TAG" downloads/tr/tr-notes.csv --clobber || true

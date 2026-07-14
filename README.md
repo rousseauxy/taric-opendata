@@ -119,12 +119,17 @@ fast no-op.
 The Turkish Customs Tariff (TGTC — *İstatistik Pozisyonlarına Bölünmüş Türk Gümrük Tarife
 Cetveli*), published annually by the Ministry of Trade as a zip of per-chapter legacy `.xls`
 files. The sync resolves the latest zip from `ggm.ticaret.gov.tr`, extracts the nomenclature
-chapters and parses them with Python + `xlrd` ([`parse-tgtc.py`](scripts/parse-tgtc.py)).
+chapters and the section/chapter notes, and parses both with Python + `xlrd`
+([`parse-tgtc.py`](scripts/parse-tgtc.py), [`parse-tgtc-notes.py`](scripts/parse-tgtc-notes.py)).
 - `tr-nomenclature.csv` — one row per code: `CnCode` (12-digit GTİP, digits only),
   `DescriptionTR` (Turkish), `Unit`, `BaseDutyRate` (the base "474" MFN rate), `IndentLevel`.
   GTİP digits 1-8 = HS6 + EU CN, so consumers can borrow EU CN descriptions (EN/NL/FR/DE) for
   the aligned levels. **Nomenclature + base duty only** — the full import-regime measures
   (preferences, anti-dumping, …) are a separate, harder source not yet covered.
+- `tr-notes.csv` — the binding Section (BÖLÜM) and Chapter (FASIL) legal notes: `Kind`
+  (`section`/`chapter`), `Code` (section roman or 2-digit chapter), `SectionRoman`, `Title`,
+  `NoteText` (Turkish; wrapped lines re-joined, note items split by newline). Section→chapter
+  linkage uses the fixed HS mapping.
 - `tr-version.txt` — change-detection sentinel (the resolved TGTC zip URL).
 
 ## Usage
