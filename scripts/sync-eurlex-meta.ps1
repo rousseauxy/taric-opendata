@@ -139,6 +139,41 @@ OFFSET $offset LIMIT $take
 if ($works.Count -eq 0) { throw "No works returned for sector '$Sector'." }
 Write-Host ("Total works: {0} in {1:N0}s" -f $works.Count, $sw.Elapsed.TotalSeconds)
 
+# ─── CN Explanatory Notes (CNEN) ──────────────────────────────────────────────
+# The consolidated "Explanatory Notes to the Combined Nomenclature" (CELEX
+# 02019XC0329(02)-YYYYMMDD) lives on EUR-Lex, fetched via the same CELLAR interface.
+# Runs BEFORE the manifest change-detection exit and keeps its OWN sentinel, so CNEN
+# refreshes even when the sector-3 manifest is unchanged. Consumed by TaricHive's
+# EurLexImporter -> ExplanatoryNotes.
+Write-Host ""
+Write-Host "Syncing consolidated CN Explanatory Notes (CNEN)..."
+try {
+    $cnenCelex = (Invoke-Sparql @"
+PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+SELECT ?celex WHERE {
+  ?w cdm:resource_legal_id_celex ?celex .
+  FILTER(STRSTARTS(STR(?celex), "02019XC0329(02)-"))
+} ORDER BY DESC(?celex) LIMIT 1
+"@).results.bindings[0].celex.value
+    if (-not $cnenCelex) { throw "No consolidated CNEN CELEX returned." }
+    $cnenDate = ($cnenCelex -split '-')[-1]              # YYYYMMDD consolidation date
+    Write-Host "  Latest consolidated CNEN: $cnenCelex"
+
+    $cnenSentinel = Join-Path $OutputFolder "cnen-version.txt"
+    if (-not $Force -and (Test-Path $cnenSentinel) -and (Get-Content $cnenSentinel -Raw).Trim() -eq $cnenDate) {
+        Write-Host "  CNEN unchanged ($cnenDate) — skipping download."
+    } else {
+        $cnenUrl  = "http://publications.europa.eu/resource/celex/$([uri]::EscapeDataString($cnenCelex))"
+        $cnenPath = Join-Path $OutputFolder "cnen-en.html"
+        Invoke-WebRequest -Uri $cnenUrl -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 300 `
+            -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = "eng" } -OutFile $cnenPath
+        Write-Host "  cnen-en.html -> $([math]::Round((Get-Item $cnenPath).Length / 1MB, 1)) MB"
+        $cnenDate | Set-Content $cnenSentinel -NoNewline
+    }
+} catch {
+    Write-Host "  CNEN sync failed (non-fatal): $($_.Exception.Message)"
+}
+
 # ─── Change detection ─────────────────────────────────────────────────────────
 
 $maxDate     = ($works | Where-Object DocDate | Sort-Object DocDate -Descending | Select-Object -First 1).DocDate

@@ -31,6 +31,7 @@ $globalExports = [ordered]@{
     exportRegime   = "RITA_Donnees_references_RGD.xml"   # Customs regimes
     exportCodMesa  = "RITA_Donnees_references_UTM.xml"   # Units of measurement
     exportPref     = "RITA_Donnees_references_PRF.xml"   # Valid preference codes
+    exportModif    = "RITA_Donnees_references_MOD.xml"   # Recent nomenclature modifications log
 }
 
 $downloaded = @()
