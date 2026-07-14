@@ -37,3 +37,5 @@ jobs:
     uses: ./.github/workflows/sync-eurlex-meta.yml
   atar:
     uses: ./.github/workflows/sync-atar.yml
+  tr:
+    uses: ./.github/workflows/sync-tr.yml

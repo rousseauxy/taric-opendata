@@ -1,0 +1,61 @@
+name: Sync Turkey (TGTC)
+
+on:
+  schedule:
+    - cron: '40 3 * * 2'   # weekly, Tuesdays 03:40 UTC (annual data + sentinel → mostly a no-op)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-download even if unchanged'
+        type: boolean
+        default: false
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install xlrd (legacy .xls reader)
+        run: python -m pip install --quiet xlrd
+
+      - name: Fetch stored version marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/tr
+          YEAR=$(date -u +%Y)
+          gh release download "tr-$YEAR" --pattern "tr-version.txt" --dir downloads/tr 2>/dev/null || true
+
+      - name: Download + parse TGTC
+        shell: pwsh
+        run: |
+          $params = @{ OutputFolder = 'downloads/tr' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-tr.ps1 @params
+
+      - name: Publish to release
+        if: hashFiles('downloads/tr/tr-nomenclature.csv') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          YEAR=$(date -u +%Y)
+          TAG="tr-$YEAR"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "Turkish Customs Tariff (TGTC) $YEAR" \
+              --notes "Auto-synced from the Turkish Ministry of Trade ([ggm.ticaret.gov.tr](https://ggm.ticaret.gov.tr)). Nomenclature of the İstatistik Pozisyonlarına Bölünmüş Türk Gümrük Tarife Cetveli: 12-digit GTİP codes, Turkish descriptions, units of measure and the base (474) duty rate. GTİP digits 1-8 = HS6 + EU CN, so consumers can borrow EU CN descriptions for the aligned levels."
+
+          gh release upload "$TAG" downloads/tr/tr-nomenclature.csv --clobber
+          gh release upload "$TAG" downloads/tr/tr-version.txt --clobber

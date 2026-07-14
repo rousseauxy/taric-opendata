@@ -27,6 +27,7 @@ both are excluded from the daily window.
 | `ebti` | EU (BTI) | [DDS2 EBTI](https://ec.europa.eu/taxation_customs/dds2/ebti/) | ZIP/CSV | `ebti-YYYY` | [![ebti](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml) |
 | `eurlex` | EU (legislation) | [CELLAR SPARQL](http://publications.europa.eu/webapi/rdf/sparql) | CSV (+ZIP) | `eurlex-YYYY-MM` | [![eurlex](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml) |
 | `atar` | UK (rulings) | [GOV.UK ATaR](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) | CSV | `atar-YYYY-MM` | [![atar](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml) |
+| `tr` | Türkiye | [Ticaret Bakanlığı (TGTC)](https://ggm.ticaret.gov.tr/) | XLS→CSV | `tr-YYYY` | [![tr](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml) |
 
 ## Data Contents
 
@@ -113,6 +114,18 @@ fast no-op.
 - `atar.csv` — one row per ruling: reference, commodity code, start/expiry dates, goods
   description, keywords, and grounds for classification.
 - `atar-version.txt` — change-detection sentinel (total ruling count).
+
+### Türkiye (`tr`)
+The Turkish Customs Tariff (TGTC — *İstatistik Pozisyonlarına Bölünmüş Türk Gümrük Tarife
+Cetveli*), published annually by the Ministry of Trade as a zip of per-chapter legacy `.xls`
+files. The sync resolves the latest zip from `ggm.ticaret.gov.tr`, extracts the nomenclature
+chapters and parses them with Python + `xlrd` ([`parse-tgtc.py`](scripts/parse-tgtc.py)).
+- `tr-nomenclature.csv` — one row per code: `CnCode` (12-digit GTİP, digits only),
+  `DescriptionTR` (Turkish), `Unit`, `BaseDutyRate` (the base "474" MFN rate), `IndentLevel`.
+  GTİP digits 1-8 = HS6 + EU CN, so consumers can borrow EU CN descriptions (EN/NL/FR/DE) for
+  the aligned levels. **Nomenclature + base duty only** — the full import-regime measures
+  (preferences, anti-dumping, …) are a separate, harder source not yet covered.
+- `tr-version.txt` — change-detection sentinel (the resolved TGTC zip URL).
 
 ## Usage
 
