@@ -174,6 +174,67 @@ SELECT ?celex WHERE {
     Write-Host "  CNEN sync failed (non-fatal): $($_.Exception.Message)"
 }
 
+# ─── CN legal Section/Chapter notes ───────────────────────────────────────────
+# The binding legal notes of the Combined Nomenclature are in Annex I to Reg 2658/87. We
+# resolve the latest CONSOLIDATED version (stable CELEX 01987R2658-YYYYMMDD), fetch its HTML
+# and parse the Section/Chapter Notes into cn-notes.csv (TaricHive's EurLexImporter loads it).
+Write-Host ""
+Write-Host "Syncing CN legal Section/Chapter notes..."
+try {
+    $cnCelex = (Invoke-Sparql @"
+PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+SELECT ?celex WHERE {
+  ?w cdm:resource_legal_id_celex ?celex .
+  FILTER(STRSTARTS(STR(?celex), "01987R2658-"))
+} ORDER BY DESC(?celex) LIMIT 1
+"@).results.bindings[0].celex.value
+    if (-not $cnCelex) { throw "No consolidated 2658/87 CELEX returned." }
+    $cnDate = ($cnCelex -split '-')[-1]
+    Write-Host "  Latest consolidated CN regulation: $cnCelex"
+
+    $cnSentinel = Join-Path $OutputFolder "cn-notes-version.txt"
+    if (-not $Force -and (Test-Path $cnSentinel) -and (Get-Content $cnSentinel -Raw).Trim() -eq $cnDate) {
+        Write-Host "  CN notes unchanged ($cnDate) — skipping."
+    } else {
+        $cnUrl = "http://publications.europa.eu/resource/celex/$([uri]::EscapeDataString($cnCelex))"
+        $h = (Invoke-WebRequest -Uri $cnUrl -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 300 `
+                -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = "eng" }).Content
+
+        $Clean = { param($s) $s = $s -replace '<[^>]*>', ' '; $s = [System.Net.WebUtility]::HtmlDecode($s); ($s -replace '\s+', ' ').Trim() }
+        $mk = [regex]::Matches($h, '<span class="italics">\s*(SECTION\s+[IVXL]+|CHAPTER\s+\d+)\s*</span>')
+        $rows = [System.Collections.Generic.List[object]]::new()
+        $curSec = ''
+        for ($i = 0; $i -lt $mk.Count; $i++) {
+            $lvlRaw = ($mk[$i].Groups[1].Value -replace '\s+', ' ').Trim().ToUpper()
+            $st = $mk[$i].Index + $mk[$i].Length
+            $en = if ($i + 1 -lt $mk.Count) { $mk[$i + 1].Index } else { [Math]::Min($h.Length, $st + 15000) }
+            $seg = $h.Substring($st, $en - $st)
+            $isSec = $lvlRaw -like 'SECTION*'
+            $nh = [regex]::Match($seg, 'class="boldface"[^>]*>\s*Notes?\b')
+            $titlePart = if ($nh.Success) { $seg.Substring(0, $nh.Index) } else { $seg }
+            $title = (& $Clean $titlePart); $title = ($title -replace '\s*<.*$', '').Trim()
+            if ($title -match '(.*?)\s*CN code') { $title = $Matches[1].Trim() }
+            $note = ''
+            if ($nh.Success) {
+                $after = & $Clean $seg.Substring($nh.Index + $nh.Length)
+                $cut = $after.IndexOf('CN code'); if ($cut -ge 0) { $after = $after.Substring(0, $cut).Trim() }
+                $note = $after
+            }
+            if ($isSec) { $curSec = ($lvlRaw -replace 'SECTION\s+', ''); $code = $curSec; $sec = $curSec }
+            else { $code = ($lvlRaw -replace 'CHAPTER\s+', ''); $sec = $curSec }
+            if ($note.Length -gt 4) {
+                $rows.Add([pscustomobject]@{ Kind = $(if ($isSec) { 'section' } else { 'chapter' }); Code = $code; SectionRoman = $sec; Title = $title; NoteText = $note })
+            }
+        }
+        if ($rows.Count -eq 0) { throw "Parsed 0 CN notes — not writing cn-notes.csv." }
+        $rows | Export-Csv -Path (Join-Path $OutputFolder "cn-notes.csv") -NoTypeInformation -Encoding UTF8
+        $cnDate | Set-Content $cnSentinel -NoNewline
+        Write-Host "  cn-notes.csv -> $($rows.Count) section/chapter notes"
+    }
+} catch {
+    Write-Host "  CN notes sync failed (non-fatal): $($_.Exception.Message)"
+}
+
 # ─── Change detection ─────────────────────────────────────────────────────────
 
 $maxDate     = ($works | Where-Object DocDate | Sort-Object DocDate -Descending | Select-Object -First 1).DocDate

@@ -27,8 +27,9 @@ jobs:
         run: |
           mkdir -p downloads/eurlex
           MONTH=$(date -u +%Y-%m)
-          gh release download "eurlex-$MONTH" --pattern "eurlex-version.txt" --dir downloads/eurlex 2>/dev/null || true
-          gh release download "eurlex-$MONTH" --pattern "cnen-version.txt"   --dir downloads/eurlex 2>/dev/null || true
+          gh release download "eurlex-$MONTH" --pattern "eurlex-version.txt"  --dir downloads/eurlex 2>/dev/null || true
+          gh release download "eurlex-$MONTH" --pattern "cnen-version.txt"    --dir downloads/eurlex 2>/dev/null || true
+          gh release download "eurlex-$MONTH" --pattern "cn-notes-version.txt" --dir downloads/eurlex 2>/dev/null || true
 
       - name: Build manifest from CELLAR SPARQL
         shell: pwsh
@@ -41,7 +42,7 @@ jobs:
         # Fires when EITHER the manifest OR the CNEN document was (re)written. The manifest
         # early-exits when unchanged, so CNEN can refresh on its own — each file is uploaded
         # only if present.
-        if: hashFiles('downloads/eurlex/eurlex-manifest.csv', 'downloads/eurlex/cnen-en.html') != ''
+        if: hashFiles('downloads/eurlex/eurlex-manifest.csv', 'downloads/eurlex/cnen-en.html', 'downloads/eurlex/cn-notes.csv') != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -57,3 +58,5 @@ jobs:
           if [ -f downloads/eurlex/eurlex-version.txt ];  then gh release upload "$TAG" downloads/eurlex/eurlex-version.txt  --clobber; fi
           if [ -f downloads/eurlex/cnen-en.html ];        then gh release upload "$TAG" downloads/eurlex/cnen-en.html        --clobber; fi
           if [ -f downloads/eurlex/cnen-version.txt ];    then gh release upload "$TAG" downloads/eurlex/cnen-version.txt    --clobber; fi
+          if [ -f downloads/eurlex/cn-notes.csv ];        then gh release upload "$TAG" downloads/eurlex/cn-notes.csv        --clobber; fi
+          if [ -f downloads/eurlex/cn-notes-version.txt ]; then gh release upload "$TAG" downloads/eurlex/cn-notes-version.txt --clobber; fi
