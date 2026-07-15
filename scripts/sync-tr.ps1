@@ -41,14 +41,13 @@ if (-not $zipUrl) { throw "Could not resolve the TGTC zip URL from ggm.ticaret.g
 Write-Host "TGTC $usedYear : $zipUrl"
 
 $sentinel = Join-Path $OutputFolder "tr-version.txt"
-if (-not $Force -and (Test-Path $sentinel) -and (Get-Content $sentinel -Raw).Trim() -eq $zipUrl) {
-    Write-Host "TGTC unchanged — skipping."
-    exit 0
-}
+$skipTgtc = (-not $Force -and (Test-Path $sentinel) -and (Get-Content $sentinel -Raw).Trim() -eq $zipUrl)
+if ($skipTgtc) { Write-Host "TGTC unchanged — skipping nomenclature (regime lists still checked)." }
 
 # ─── Download + extract ───────────────────────────────────────────────────────
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "tgtc-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+if (-not $skipTgtc) {
 try {
     $zip = Join-Path $tmp "tgtc.zip"
     Invoke-WebRequest -Uri ([uri]::EscapeUriString($zipUrl)) -UserAgent $UA -UseBasicParsing -OutFile $zip -TimeoutSec 300
@@ -97,4 +96,54 @@ try {
 }
 finally {
     try { Remove-Item $tmp -Recurse -Force } catch { }
+}
+}
+
+# ─── Import Regime Decree annex lists (Karar 3350) → tr-measures.csv ────────────
+# The applied duty per GTİP × country group (incl. compound MIN/MAX EUR specific
+# duties). Published as "rejim YYYY.zip" on the consolidated decision page.
+# Non-fatal: the nomenclature above is the critical output.
+function Resolve-RegimeUrl {
+    $page = "https://ticaret.gov.tr/ithalat/ithalat-mevzuati/ithalat-rejimi-karari-igv-karari-ve-ithalat-tebligleri/1-ithalat-rejimi-kararikarar-sayisi3350karar-metni-ve-tablolar-konsolide-edilmis-olup-gunceldir"
+    try { $html = (Invoke-WebRequest -Uri $page -UserAgent $UA -UseBasicParsing -TimeoutSec 60).Content }
+    catch { return $null }
+    $m = [regex]::Match($html, 'href="(?<u>[^"]*rejim[^"]*\.zip)"', 'IgnoreCase')
+    if (-not $m.Success) { return $null }
+    $u = $m.Groups['u'].Value
+    if ($u -notmatch '^https?://') { $u = "https://ticaret.gov.tr" + $(if ($u.StartsWith("/")) { $u } else { "/$u" }) }
+    return $u
+}
+
+try {
+    $regimeUrl = Resolve-RegimeUrl
+    if (-not $regimeUrl) { Write-Warning "Could not resolve the Import Regime zip URL — skipping tr-measures.csv."; exit 0 }
+    Write-Host "Import Regime: $regimeUrl"
+
+    $regimeSentinel = Join-Path $OutputFolder "tr-regime-version.txt"
+    if (-not $Force -and (Test-Path $regimeSentinel) -and (Get-Content $regimeSentinel -Raw).Trim() -eq $regimeUrl) {
+        Write-Host "Import Regime unchanged — skipping."
+        exit 0
+    }
+
+    $tmp2 = Join-Path ([System.IO.Path]::GetTempPath()) "trregime-$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Force -Path $tmp2 | Out-Null
+    try {
+        $rzip = Join-Path $tmp2 "rejim.zip"
+        Invoke-WebRequest -Uri ([uri]::EscapeUriString($regimeUrl)) -UserAgent $UA -UseBasicParsing -OutFile $rzip -TimeoutSec 300
+        Write-Host "  downloaded $([math]::Round((Get-Item $rzip).Length / 1MB, 1)) MB"
+
+        & $py -m pip install --quiet --disable-pip-version-check openpyxl 2>&1 | Out-Null
+        $measuresCsv = Join-Path $OutputFolder "tr-measures.csv"
+        & $py (Join-Path $PSScriptRoot "parse-regime.py") $rzip $measuresCsv
+        if ((Test-Path $measuresCsv) -and (Get-Item $measuresCsv).Length -gt 1000) {
+            $regimeUrl | Set-Content $regimeSentinel -NoNewline
+            Write-Host "Wrote tr-measures.csv ($([math]::Round((Get-Item $measuresCsv).Length / 1KB, 0)) KB)"
+        } else { Write-Warning "parse-regime.py produced no usable output." }
+    }
+    finally {
+        try { Remove-Item $tmp2 -Recurse -Force } catch { }
+    }
+}
+catch {
+    Write-Warning "Import Regime sync failed (non-fatal): $_"
 }
