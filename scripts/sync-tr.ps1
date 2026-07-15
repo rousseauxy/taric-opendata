@@ -37,12 +37,21 @@ foreach ($y in @($Year, ($Year - 1))) {
     $zipUrl = Resolve-TgtcUrl $y
     if ($zipUrl) { $usedYear = $y; break }
 }
-if (-not $zipUrl) { throw "Could not resolve the TGTC zip URL from ggm.ticaret.gov.tr." }
-Write-Host "TGTC $usedYear : $zipUrl"
-
 $sentinel = Join-Path $OutputFolder "tr-version.txt"
-$skipTgtc = (-not $Force -and (Test-Path $sentinel) -and (Get-Content $sentinel -Raw).Trim() -eq $zipUrl)
-if ($skipTgtc) { Write-Host "TGTC unchanged — skipping nomenclature (regime lists still checked)." }
+if (-not $zipUrl) {
+    # Announcement page unreachable (WAF/outage). With a previous sync on record this
+    # is non-fatal — keep the nomenclature as-is and still check the regime lists.
+    if (Test-Path $sentinel) {
+        Write-Warning "Could not resolve the TGTC zip URL — keeping existing nomenclature outputs."
+        $skipTgtc = $true
+    }
+    else { throw "Could not resolve the TGTC zip URL from ggm.ticaret.gov.tr." }
+}
+else {
+    Write-Host "TGTC $usedYear : $zipUrl"
+    $skipTgtc = (-not $Force -and (Test-Path $sentinel) -and (Get-Content $sentinel -Raw).Trim() -eq $zipUrl)
+    if ($skipTgtc) { Write-Host "TGTC unchanged — skipping nomenclature (regime lists still checked)." }
+}
 
 # ─── Download + extract ───────────────────────────────────────────────────────
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "tgtc-$([guid]::NewGuid().ToString('N'))"
@@ -103,26 +112,33 @@ finally {
 # The applied duty per GTİP × country group (incl. compound MIN/MAX EUR specific
 # duties). Published as "rejim YYYY.zip" on the consolidated decision page.
 # Non-fatal: the nomenclature above is the critical output.
-# The decision page sits behind a WAF that can time out for CI runner IPs, so page
-# resolution is best-effort with a short timeout; the pinned per-year /data/ URLs
-# (static assets, reachable like the ggm TGTC zip) are the fallback. Update the
-# pin when a new year's decree is published.
+# The decision page sits behind a WAF that blocks bare HTTP clients from CI runner
+# IPs — fetch with curl + browser-like headers (same fix as sync-nl.ps1). The pinned
+# per-year /data/ URLs (static assets) are the fallback; update the pin when a new
+# year's decree is published.
 $KnownRegimeUrls = @{
     2026 = "https://ticaret.gov.tr/data/68d2951f13b876c2509a480b/rejim 2026.zip"
 }
 
+$curlHeaders = @(
+    "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "-H", "Accept-Language: tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "-H", "Referer: https://ticaret.gov.tr/"
+)
+
 function Resolve-RegimeUrl {
     $page = "https://ticaret.gov.tr/ithalat/ithalat-mevzuati/ithalat-rejimi-karari-igv-karari-ve-ithalat-tebligleri/1-ithalat-rejimi-kararikarar-sayisi3350karar-metni-ve-tablolar-konsolide-edilmis-olup-gunceldir"
-    try {
-        $html = (Invoke-WebRequest -Uri $page -UserAgent $UA -UseBasicParsing -TimeoutSec 30).Content
-        $m = [regex]::Match($html, 'href="(?<u>[^"]*rejim[^"]*\.zip)"', 'IgnoreCase')
+    $html = curl -fsSL @curlHeaders --max-time 30 $page 2>$null
+    if ($LASTEXITCODE -eq 0 -and $html) {
+        $m = [regex]::Match(($html -join "`n"), 'href="(?<u>[^"]*rejim[^"]*\.zip)"', 'IgnoreCase')
         if ($m.Success) {
             $u = $m.Groups['u'].Value
             if ($u -notmatch '^https?://') { $u = "https://ticaret.gov.tr" + $(if ($u.StartsWith("/")) { $u } else { "/$u" }) }
             return $u
         }
     }
-    catch { Write-Warning "Regime page fetch failed ($_) — trying pinned URL." }
+    Write-Warning "Regime page fetch failed (curl exit $LASTEXITCODE) — trying pinned URL."
 
     foreach ($y in @((Get-Date).Year, (Get-Date).Year - 1)) {
         if ($KnownRegimeUrls.ContainsKey($y)) { return $KnownRegimeUrls[$y] }
@@ -145,7 +161,8 @@ try {
     New-Item -ItemType Directory -Force -Path $tmp2 | Out-Null
     try {
         $rzip = Join-Path $tmp2 "rejim.zip"
-        Invoke-WebRequest -Uri ([uri]::EscapeUriString($regimeUrl)) -UserAgent $UA -UseBasicParsing -OutFile $rzip -TimeoutSec 300
+        curl -fsSL @curlHeaders --max-time 300 -o $rzip ([uri]::EscapeUriString($regimeUrl))
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rzip)) { throw "curl failed downloading the regime zip (exit $LASTEXITCODE)" }
         Write-Host "  downloaded $([math]::Round((Get-Item $rzip).Length / 1MB, 1)) MB"
 
         & $py -m pip install --quiet --disable-pip-version-check openpyxl 2>&1 | Out-Null
