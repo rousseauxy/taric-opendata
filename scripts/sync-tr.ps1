@@ -103,15 +103,31 @@ finally {
 # The applied duty per GTİP × country group (incl. compound MIN/MAX EUR specific
 # duties). Published as "rejim YYYY.zip" on the consolidated decision page.
 # Non-fatal: the nomenclature above is the critical output.
+# The decision page sits behind a WAF that can time out for CI runner IPs, so page
+# resolution is best-effort with a short timeout; the pinned per-year /data/ URLs
+# (static assets, reachable like the ggm TGTC zip) are the fallback. Update the
+# pin when a new year's decree is published.
+$KnownRegimeUrls = @{
+    2026 = "https://ticaret.gov.tr/data/68d2951f13b876c2509a480b/rejim 2026.zip"
+}
+
 function Resolve-RegimeUrl {
     $page = "https://ticaret.gov.tr/ithalat/ithalat-mevzuati/ithalat-rejimi-karari-igv-karari-ve-ithalat-tebligleri/1-ithalat-rejimi-kararikarar-sayisi3350karar-metni-ve-tablolar-konsolide-edilmis-olup-gunceldir"
-    try { $html = (Invoke-WebRequest -Uri $page -UserAgent $UA -UseBasicParsing -TimeoutSec 60).Content }
-    catch { return $null }
-    $m = [regex]::Match($html, 'href="(?<u>[^"]*rejim[^"]*\.zip)"', 'IgnoreCase')
-    if (-not $m.Success) { return $null }
-    $u = $m.Groups['u'].Value
-    if ($u -notmatch '^https?://') { $u = "https://ticaret.gov.tr" + $(if ($u.StartsWith("/")) { $u } else { "/$u" }) }
-    return $u
+    try {
+        $html = (Invoke-WebRequest -Uri $page -UserAgent $UA -UseBasicParsing -TimeoutSec 30).Content
+        $m = [regex]::Match($html, 'href="(?<u>[^"]*rejim[^"]*\.zip)"', 'IgnoreCase')
+        if ($m.Success) {
+            $u = $m.Groups['u'].Value
+            if ($u -notmatch '^https?://') { $u = "https://ticaret.gov.tr" + $(if ($u.StartsWith("/")) { $u } else { "/$u" }) }
+            return $u
+        }
+    }
+    catch { Write-Warning "Regime page fetch failed ($_) — trying pinned URL." }
+
+    foreach ($y in @((Get-Date).Year, (Get-Date).Year - 1)) {
+        if ($KnownRegimeUrls.ContainsKey($y)) { return $KnownRegimeUrls[$y] }
+    }
+    return $null
 }
 
 try {
