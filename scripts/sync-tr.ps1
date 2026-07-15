@@ -140,7 +140,8 @@ function Resolve-RegimeUrl {
     }
     Write-Warning "Regime page fetch failed (curl exit $LASTEXITCODE) — trying pinned URL."
 
-    foreach ($y in @((Get-Date).Year, (Get-Date).Year - 1)) {
+    # Note the extra parentheses: PowerShell's comma binds tighter than '-'.
+    foreach ($y in @((Get-Date).Year, ((Get-Date).Year - 1))) {
         if ($KnownRegimeUrls.ContainsKey($y)) { return $KnownRegimeUrls[$y] }
     }
     return $null
@@ -180,3 +181,7 @@ try {
 catch {
     Write-Warning "Import Regime sync failed (non-fatal): $_"
 }
+
+# GitHub Actions' pwsh shell exits with $LASTEXITCODE — a failed (but handled) curl
+# above must not fail the job. Real failures throw and exit non-zero on their own.
+exit 0
