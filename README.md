@@ -45,10 +45,18 @@ EU TARIC + Dutch national measures (BTW, accijns). Sourced from the Belastingdie
 - Incremental download (daily changes)
 
 ### United Kingdom (`gb`)
-UK Global Tariff (post-Brexit). Three CSV tables per version from the UK Department for Business and Trade:
+UK Global Tariff (post-Brexit). All 50 CSV tables per version from the UK Department for
+Business and Trade — commodities, measures, quotas, regulations, certificates, geo areas and
+footnotes (see the table list in `scripts/sync-gb.ps1`). Key files:
 - `commodities-{version}.csv` — goods nomenclature and descriptions
 - `measures-on-declarable-commodities-{version}.csv` — duties and restrictions per commodity
 - `measures-as-defined-{version}.csv` — measures as defined in the tariff hierarchy
+
+The DBT API mints a new version id (`v4.0.NNNN`) almost daily and each version is a **full**
+~1 GB dump of all 50 tables, so the monthly release keeps only the newest
+`KEEP_VERSIONS` (default 2) snapshots — older ones are pruned on each run. Every snapshot
+carries the complete validity history, so point-in-time queries never need the pruned dailies.
+Consumers should resolve the version from the filenames rather than pinning one.
 
 ### Norway (`no`)
 Norwegian customs tariff structure and quotas (CC BY 4.0). From Tolletaten CKAN portal.
@@ -99,6 +107,10 @@ without any per-code lookup against CELLAR. Split into a daily **metadata** sync
   `02019XC0329(02)`, latest consolidation resolved via CELLAR). Published by the daily metadata
   sync with its own `cnen-version.txt` sentinel, so it refreshes independently of the manifest.
   Notes are keyed by CN chapter/heading/subheading.
+- `cn-notes.csv` — the **binding CN legal Section/Chapter notes** from Annex I to Regulation
+  2658/87 (latest consolidation `01987R2658-YYYYMMDD` resolved via CELLAR, HTML parsed).
+  Columns: `Kind` (`section`/`chapter`), `Code`, `SectionRoman`, `Title`, `NoteText`. Own
+  `cn-notes-version.txt` sentinel (consolidation date). Consumed by TaricHive's EurLexImporter.
 - `eurlex-text-{lang}.zip` — **manual only** (`Sync EUR-Lex legislation (full text)` workflow).
   Per-CELEX HTML full text, one language per zip. Use the `limit`/a filtered manifest — running
   full text over all ~233k acts is impractical (tens of GB). Older acts with no HTML
@@ -124,12 +136,18 @@ chapters and the section/chapter notes, and parses both with Python + `xlrd`
 - `tr-nomenclature.csv` — one row per code: `CnCode` (12-digit GTİP, digits only),
   `DescriptionTR` (Turkish), `Unit`, `BaseDutyRate` (the base "474" MFN rate), `IndentLevel`.
   GTİP digits 1-8 = HS6 + EU CN, so consumers can borrow EU CN descriptions (EN/NL/FR/DE) for
-  the aligned levels. **Nomenclature + base duty only** — the full import-regime measures
-  (preferences, anti-dumping, …) are a separate, harder source not yet covered.
+  the aligned levels.
 - `tr-notes.csv` — the binding Section (BÖLÜM) and Chapter (FASIL) legal notes: `Kind`
   (`section`/`chapter`), `Code` (section roman or 2-digit chapter), `SectionRoman`, `Title`,
   `NoteText` (Turkish; wrapped lines re-joined, note items split by newline). Section→chapter
   linkage uses the fixed HS mapping.
+- `tr-measures.csv` — the **applied duty rates** from the Import Regime Decree annex lists
+  (Karar 3350, "rejim YYYY.zip", lists I–VII; parsed with
+  [`parse-regime.py`](scripts/parse-regime.py)): one row per GTİP × country-group column.
+  Columns: `Code` (12-digit, zero-padded — the xlsx drops leading zeros), `Group` (column
+  label, e.g. `AB, BK`, `GÜR`, `DÜ`), `Rate` (as published: number, `T1`/`T2` composition
+  markers, `M`, …), `List`. The zip URL is resolved from `ggm.ticaret.gov.tr` with a pinned
+  per-year fallback for CI; own `tr-regime-version.txt` sentinel.
 - `tr-version.txt` — change-detection sentinel (the resolved TGTC zip URL).
 
 ## Usage

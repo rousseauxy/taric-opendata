@@ -16,6 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # How many version snapshots to retain per monthly release. The UK API mints a new
+      # version id every day and every filename carries it, so without pruning a release
+      # accumulates 50 new assets (~1 GB) daily and hits GitHub's 1000-asset cap mid-month.
+      # Each snapshot is a full dump with complete validity history, so old dailies are
+      # redundant; 2 keeps the current version plus one for diffing.
+      KEEP_VERSIONS: '2'
 
     steps:
       - uses: actions/checkout@v4
@@ -26,8 +33,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="gb-$(date -u +%Y-%m)"
-          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          rel=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id' 2>/dev/null || echo "")
+          assets=""
+          if [ -n "$rel" ]; then
+            # Dedicated assets endpoint + --paginate: the release can hold more than one page.
+            assets=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$rel/assets" \
+              --jq '.[].name' | paste -sd, -)
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release_id=$rel" >> "$GITHUB_OUTPUT"
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
 
@@ -38,6 +52,34 @@ jobs:
           $params = @{ OutputFolder = 'downloads/gb'; SkipFiles = $skipFiles }
           if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true; $params['SkipFiles'] = @() }
           scripts/sync-gb.ps1 @params
+
+      # Runs before the upload so the incoming version always fits under the 1000-asset cap.
+      # Guarded on new files existing: on a no-change run nothing is uploaded, so nothing
+      # should be pruned either.
+      - name: Prune superseded versions
+        if: steps.existing.outputs.release_id != '' && hashFiles('downloads/gb/*') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REL="${{ steps.existing.outputs.release_id }}"
+          assets=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$REL/assets" \
+            --jq '.[] | [.id, .name] | @tsv')
+
+          # Newest (KEEP_VERSIONS - 1) versions survive; the version about to be uploaded
+          # takes the last slot. sort -V orders v4.0.999 before v4.0.1000.
+          keep=$(printf '%s\n' "$assets" | cut -f2 \
+            | sed -n 's/.*-\(v[0-9][0-9.]*\)\.csv$/\1/p' \
+            | sort -uV | tail -n "$((KEEP_VERSIONS - 1))")
+          echo "Retaining: ${keep:-<none>}"
+
+          printf '%s\n' "$assets" | while IFS=$'\t' read -r id name; do
+            [ -n "$id" ] || continue
+            v=$(printf '%s' "$name" | sed -n 's/.*-\(v[0-9][0-9.]*\)\.csv$/\1/p')
+            if [ -n "$v" ] && ! printf '%s\n' "$keep" | grep -qxF -- "$v"; then
+              echo "Pruning: $name"
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" --silent
+            fi
+          done
 
       - name: Publish to release
         if: hashFiles('downloads/gb/*') != ''
