@@ -20,23 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get already-uploaded release assets
-        id: existing
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="no-$(date -u +%Y-%m)"
-          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "assets=$assets" >> "$GITHUB_OUTPUT"
-          echo "Existing assets: $assets"
-
+      # Tolletaten publishes stable filenames, so assets are replaced in place (as for CH).
+      # Skipping files already in the release would freeze the mirror at the first run of
+      # the month and turn every later run into a no-op.
       - name: Download from Tolletaten CKAN
         shell: pwsh
         run: |
-          $skipFiles = ('${{ steps.existing.outputs.assets }}' -split ',' | Where-Object { $_ -ne '' })
-          $params = @{ OutputFolder = 'downloads/no'; SkipFiles = $skipFiles }
-          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true; $params['SkipFiles'] = @() }
+          $params = @{ OutputFolder = 'downloads/no' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
           scripts/sync-no.ps1 @params
 
       - name: Publish to release
@@ -51,13 +42,8 @@ jobs:
               --title "Norway Customs Tariff ${TAG}" \
               --notes "Auto-synced from [Tolletaten open data](https://data.toll.no) (CC BY 4.0). Includes all 27 published datasets: tariff structure, duty rates, quotas, restrictions, trade agreements, country groups, exchange rates, and more."
 
-          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/no/*; do
-            name=$(basename "$f")
-            if echo "$EXISTING" | grep -qF "\"$name\""; then
-              echo "Already uploaded: $name"
-            else
-              echo "Uploading: $name"
-              gh release upload "$TAG" "$f"
-            fi
+            [ -f "$f" ] || continue
+            echo "Uploading: $(basename "$f")"
+            gh release upload "$TAG" "$f" --clobber
           done

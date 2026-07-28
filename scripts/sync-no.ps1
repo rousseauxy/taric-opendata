@@ -1,8 +1,11 @@
 # Downloads Norwegian customs tariff data from the Tolletaten CKAN open data portal.
 # Source: https://data.toll.no  —  Licence: CC BY 4.0
+#
+# Filenames are stable (no date or version), so the release is refreshed in place —
+# there is deliberately no "already in the release, skip it" path: that would freeze
+# the mirror at the first run of each month.
 param(
     [string]$OutputFolder = "downloads/no",
-    [string[]]$SkipFiles  = @(),
     [switch]$Force
 )
 
@@ -73,11 +76,6 @@ foreach ($id in $datasetIds) {
         $resName  = ($resource.name -replace '[^\w\-]', '_').ToLower()
         $filename = "$id-$resName.$ext"
         $outPath  = Join-Path $OutputFolder $filename
-
-        if (-not $Force -and $SkipFiles -contains $filename) {
-            Write-Host "Up to date (in release): $filename"
-            continue
-        }
 
         if ((Test-Path $outPath) -and -not $Force) {
             # Skip if local copy is at least as recent as the remote resource.
