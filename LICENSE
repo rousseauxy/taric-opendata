@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-NOTE: This licence covers the CODE in this repository only (the sync scripts,
-parsers and GitHub Actions workflows). It does NOT cover the tariff data
-published as GitHub Release assets — that data is mirrored from national and EU
-customs authorities and remains under each source's own terms. See
-DATA-LICENSES.md.
