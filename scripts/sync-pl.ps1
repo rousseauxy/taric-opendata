@@ -2,6 +2,10 @@
 # Source: https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions
 # The page uses JSF/PrimeFaces: GET page → AJAX consent checkbox → AJAX download button.
 # Response is a ZIP (~220 MB) containing base-YYYYMMDDTHHMMSS.xml (~7.7 GB uncompressed).
+#
+# The consent checkbox is an acknowledgement, not a licence: the data is the property of DG TAXUD
+# and the Ministry of Finance, is of informative character, and comes from the TARIC and ISZTAR4
+# systems. No restriction on redistribution. Carried forward in DATA-LICENSES.md.
 param(
     [string]$OutputFolder = "downloads/pl",
     [string[]]$SkipFiles  = @(),

@@ -175,6 +175,19 @@ mirrors tarbel-opendata's releases — both run the same scraper independently. 
 remains as a Belgium-only mirror; this repo publishes `be` alongside all other jurisdictions
 under the unified `{country}-YYYY-MM` release scheme.
 
+## Licence
+
+The **code** in this repository (sync scripts, parsers, workflows) is [MIT](LICENSE).
+
+The **data** published as Release assets is not ours — it is mirrored from national and EU customs
+authorities and stays under each source's own terms. Some sources are explicitly open (`gb`/`atar`
+OGL v3.0, `no` CC BY 4.0, `us` public domain, `eu`/`ebti`/`eurlex` under the EU reuse decision);
+others publish openly but state no reuse licence. Per-source status, required attribution, and a
+takedown contact are in [DATA-LICENSES.md](DATA-LICENSES.md).
+
+These mirrors are **not an authentic source of tariff law** — verify against the official source
+before relying on them.
+
 ## Related projects
 
 - [tarbel-opendata](https://github.com/rousseauxy/tarbel-opendata) — Belgian minfin data source
