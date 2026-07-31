@@ -3,6 +3,11 @@ name: Sync France (RITA)
 on:
   schedule:
     - cron: '0 3 * * *'
+    # Second daily pass, 12h offset. One window a day means a single failure loses the
+    # day: an upstream outage, a maintenance window on either side, or a publish that
+    # slips past our slot (NL lands ~5 minutes before it). An unchanged source is a no-op
+    # thanks to change detection, so the retry costs almost nothing.
+    - cron: '0 15 * * *'
   workflow_dispatch:
     inputs:
       force:
