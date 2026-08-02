@@ -38,7 +38,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="gb-$(date -u +%Y-%m)"
-          rel=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id' 2>/dev/null || echo "")
+          # gh api writes its 404 body to STDOUT, so `2>/dev/null || echo ""` does not stop the
+          # error JSON landing in $rel — it is already inside the command substitution. That is
+          # what broke every run from 1 August: the month's release does not exist yet, so
+          # release_id became {"message":"Not Found",...}, the prune step's `!= ''` guard passed
+          # on it, and `REL="{"message":...}"` was invalid shell (exit 127). Prune then failed
+          # before Publish, and Publish is the only step that creates the release — so the next
+          # run 404'd identically. Self-perpetuating until someone looked.
+          #
+          # Treat anything that is not a plain integer as "no release".
+          rel=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id' 2>/dev/null || true)
+          case "$rel" in (''|*[!0-9]*) rel="" ;; esac
           assets=""
           if [ -n "$rel" ]; then
             # Dedicated assets endpoint + --paginate: the release can hold more than one page.
