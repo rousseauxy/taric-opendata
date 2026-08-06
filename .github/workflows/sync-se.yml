@@ -54,7 +54,7 @@ jobs:
           gh release view "$TAG" 2>/dev/null || \
             gh release create "$TAG" \
               --title "Sweden Tulltaxan ${TAG}" \
-              --notes "Auto-synced from [Tullverket Tariff File Distribution](https://distr.tullverket.se/tulltaxan). Full snapshot (xml/tot/) — AdditionalCode, Certificate, CodeList, DeclarableGoodsNomenclature, DutyExpression, Footnote, GeographicalArea, GoodsNomenclature, Measure, and more. Files are delivered as gzipped XML (.xml.gz)."
+              --notes "Auto-synced from [Tullverket Tariff File Distribution](https://distr.tullverket.se/tulltaxan). Full snapshot (xml/tot/, refreshed monthly) plus the daily incrementals (xml/dif/) that keep it current — AdditionalCode, Certificate, CodeList, DeclarableGoodsNomenclature, DutyExpression, Footnote, GeographicalArea, GoodsNomenclature, Measure, and more. Files are delivered as gzipped XML (.xml.gz)."
 
           EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/se/*; do
