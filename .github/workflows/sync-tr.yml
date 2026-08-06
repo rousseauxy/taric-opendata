@@ -57,7 +57,7 @@ jobs:
       # underneath us and no amount of change detection could have surfaced it, because nothing
       # downstream of the parse ever ran.
       - name: Publish to release
-        if: hashFiles('downloads/tr/*.csv') != ''
+        if: hashFiles('downloads/tr/*.csv', 'downloads/tr/*.zip') != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -76,3 +76,10 @@ jobs:
           [ -f downloads/tr/tr-notes.csv ] && gh release upload "$TAG" downloads/tr/tr-notes.csv --clobber || true
           [ -f downloads/tr/tr-measures.csv ] && gh release upload "$TAG" downloads/tr/tr-measures.csv --clobber || true
           [ -f downloads/tr/tr-regime-version.txt ] && gh release upload "$TAG" downloads/tr/tr-regime-version.txt --clobber || true
+
+          # The publisher's own archives, mirrored rather than only derived from. TaricHive's
+          # TrImporter reads rejim.zip directly; tgtc.zip is here so the .xls parse (which stays
+          # in Python — legacy BIFF needs xlrd) stays reproducible and the source bytes are
+          # recoverable when a parser bug turns up. Each is only present when it changed.
+          [ -f downloads/tr/rejim.zip ] && gh release upload "$TAG" downloads/tr/rejim.zip --clobber || true
+          [ -f downloads/tr/tgtc.zip ] && gh release upload "$TAG" downloads/tr/tgtc.zip --clobber || true

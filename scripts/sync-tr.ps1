@@ -58,7 +58,12 @@ $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "tgtc-$([guid]::NewGuid().ToS
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 if (-not $skipTgtc) {
 try {
-    $zip = Join-Path $tmp "tgtc.zip"
+    # Kept in the output folder, not the temp dir: the raw archive is published alongside the
+    # derived CSVs. Deriving here and discarding the source meant a parser bug could not be
+    # re-run against past releases, and the freshness digest TaricHive computes was over OUR
+    # csv rather than the Ministry's bytes — so a parser regression that dropped rows looked
+    # exactly like the publisher having fewer of them. Costs 2.6 MB.
+    $zip = Join-Path $OutputFolder "tgtc.zip"
     Invoke-WebRequest -Uri ([uri]::EscapeUriString($zipUrl)) -UserAgent $UA -UseBasicParsing -OutFile $zip -TimeoutSec 300
     Write-Host "  downloaded $([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB"
 
@@ -168,7 +173,9 @@ try {
     $tmp2 = Join-Path ([System.IO.Path]::GetTempPath()) "trregime-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Force -Path $tmp2 | Out-Null
     try {
-        $rzip = Join-Path $tmp2 "rejim.zip"
+        # Also kept — see the note on tgtc.zip above. This is the archive TaricHive's TrImporter
+        # reads directly; tr-measures.csv is published beside it during the transition.
+        $rzip = Join-Path $OutputFolder "rejim.zip"
         curl -fsSL @curlHeaders --max-time 300 -o $rzip ([uri]::EscapeUriString($regimeUrl))
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rzip)) { throw "curl failed downloading the regime zip (exit $LASTEXITCODE)" }
         Write-Host "  downloaded $([math]::Round((Get-Item $rzip).Length / 1MB, 1)) MB"
@@ -176,6 +183,9 @@ try {
         $zipHash = (Get-FileHash $rzip -Algorithm SHA256).Hash
         if (-not $Force -and $zipHash -eq $priorHash) {
             Write-Host "Import Regime unchanged (SHA256 match) — skipping."
+            # Identical to the copy already on the release; drop it so the publish step has
+            # nothing to re-upload.
+            Remove-Item $rzip -Force -ErrorAction SilentlyContinue
             exit 0
         }
 

@@ -42,16 +42,23 @@ LIST_RE = re.compile(r"^(I{1,3}|IV|V|VI|VII)\b", re.IGNORECASE)
 #   II 86-89 (483 codes: vehicles, aircraft, ships) the group labels are the numbers 1-5 on the
 #       row ABOVE the GTİP header, referencing a legend, so they are neither on the row this
 #       parser reads nor usable as area names.
-KNOWN_UNREADABLE = {
-    "V Sayılı Liste.xlsx",
-    "VI Sayılı Liste.xlsx",
-    "II Sayılı Liste 86-89. Fasıllar.xlsx",
-}
+# Keyed on the annex identity, not the filename. Python's zipfile decodes non-UTF-8 entry names
+# as CP437 exactly as .NET's ZipArchive does, and these zips do not set the UTF-8 flag — so the
+# Turkish characters cannot be relied on. The leading roman numeral and the chapter range are
+# ASCII and survive. Keep this in step with TrRegimeParser.KnownUnreadable in TaricHive while
+# both implementations exist.
+KNOWN_UNREADABLE = {"V", "VI", "II:86-89"}
+
+RANGE_RE = re.compile(r"(\d{2})\s*-\s*(\d{2})")
 
 
-def normalise(name):
-    """Match regardless of the dotted-I mangling the Ministry's own filenames vary on."""
-    return name.replace("ì", "ı").replace("Ì", "İ").strip()
+def annex_key(filename):
+    """'II Sayılı Liste 86-89. Fasıllar.xlsx' -> 'II:86-89'; 'V Sayìlì Liste.xlsx' -> 'V'."""
+    lid = list_no(filename)
+    if lid is None:
+        return ""
+    m = RANGE_RE.search(filename)
+    return f"{lid}:{m.group(1)}-{m.group(2)}" if m else lid
 
 
 def list_no(filename):
@@ -117,9 +124,9 @@ def main(zip_path, out_csv):
         for ws in wb.worksheets:
             parse_sheet(ws, lid, rows)
         gained = len(rows) - before
-        if gained == 0 and normalise(base) not in KNOWN_UNREADABLE:
+        if gained == 0 and annex_key(base) not in KNOWN_UNREADABLE:
             empty.append(base)
-        note = "  [known gap]" if normalise(base) in KNOWN_UNREADABLE else ""
+        note = "  [known gap]" if annex_key(base) in KNOWN_UNREADABLE else ""
         print(f"  {base}: +{gained} rows (cumulative {len(rows)}){note}", file=sys.stderr)
 
     # Both of these used to be silent, and both were hiding real data. "V Sayılı Liste.xlsx"
@@ -130,8 +137,8 @@ def main(zip_path, out_csv):
     if unmatched:
         print(f"WARNING: {len(unmatched)} file(s) in the zip were not parsed: "
               + ", ".join(sorted(unmatched)), file=sys.stderr)
-    known = sorted(b for b in KNOWN_UNREADABLE if any(normalise(n.rsplit('/', 1)[-1]) == b
-                                                      for n in z.namelist()))
+    known = sorted({annex_key(n.rsplit('/', 1)[-1]) for n in z.namelist()}
+                   & KNOWN_UNREADABLE)
     if known:
         print(f"WARNING: {len(known)} known-unreadable annex(es) skipped "
               f"(~2,628 codes; see KNOWN_UNREADABLE): " + ", ".join(known), file=sys.stderr)
