@@ -20,9 +20,21 @@ $PageUrl   = "https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions?lang=EN&
 $OutFile   = Join-Path $OutputFolder "isztar4-base.zip"
 $HashFile  = Join-Path $OutputFolder "isztar4-base.zip.sha256"
 
-if (-not $Force -and $SkipFiles -contains 'isztar4-base.zip') {
-    Write-Host "isztar4-base.zip already in release — skipping download."
-    exit 0
+# There is deliberately no "already in the release, skip it" guard, and there used to be one.
+#
+# It is safe only where the publisher's file names change — BE, NL, SE and GB all carry a
+# timestamp or a version in the name, so an existing asset really is an immutable snapshot.
+# ISZTAR4 publishes one file under one constant name, and the release tag is per YEAR, so the
+# guard meant the first download of January was the only download of the year. It froze the
+# 2026 release at 2026-06-29 and would have held there until January 2027, while the workflow
+# ran twice a day reporting success.
+#
+# The SHA256 comparison below is the correct mechanism and was already written — it just sat
+# downstream of a guard that returned before it could ever run. Cost of removing it: ~220 MB
+# downloaded and discarded per run when nothing has changed. Nothing is uploaded in that case,
+# so the release asset's digest is stable and TaricHive does not re-import.
+if ($SkipFiles.Count -gt 0) {
+    Write-Host "Release already holds: $($SkipFiles -join ', ') — downloading anyway to compare."
 }
 
 # Step 1: GET page — extract form action URL (contains jsessionid) and ViewState

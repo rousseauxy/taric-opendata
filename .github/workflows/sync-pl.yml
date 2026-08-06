@@ -37,6 +37,20 @@ jobs:
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
 
+      # sync-pl.ps1 decides whether to publish by comparing SHA256 against the previous run's.
+      # Runners are fresh, so without fetching the sidecar there is nothing to compare and every
+      # run re-uploads 220 MB — which would change the asset digest and make TaricHive rebuild
+      # 1.38 M measures twice a day for no reason. 66 bytes to avoid that.
+      - name: Fetch the previous SHA256 sidecar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/pl
+          gh release download "${{ steps.existing.outputs.tag }}" \
+            -p 'isztar4-base.zip.sha256' -D downloads/pl 2>/dev/null \
+            && echo "Previous hash: $(cat downloads/pl/isztar4-base.zip.sha256)" \
+            || echo "No previous hash — this run will publish."
+
       - name: Download ISZTAR4 startup file
         shell: pwsh
         run: |
@@ -57,4 +71,7 @@ jobs:
               --title "Poland ISZTAR4 ${TAG}" \
               --notes "Auto-synced from [ISZTAR4 XmlExtractions](https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions). Full startup file containing all EU TARIC + Polish national tariff objects (~7.7 GB XML, ~220 MB compressed ZIP). Source: Ministry of Finance (Ministerstwo Finansów) + European Commission DG TAXUD."
 
-          gh release upload "$TAG" downloads/pl/isztar4-base.zip --clobber
+          # The sidecar goes up with it, so the next run has something to compare against.
+          gh release upload "$TAG" \
+            downloads/pl/isztar4-base.zip \
+            downloads/pl/isztar4-base.zip.sha256 --clobber
