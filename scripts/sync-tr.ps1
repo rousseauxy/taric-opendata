@@ -199,6 +199,17 @@ try {
             $zipHash | Set-Content $regimeSentinel -NoNewline
             Write-Host "Wrote tr-measures.csv ($([math]::Round((Get-Item $measuresCsv).Length / 1KB, 0)) KB)"
         } else { Write-Warning "parse-regime.py produced no usable output." }
+
+        # ── GSP product-group annexes (EK-2/3/4) → tr-gsp-sectors.csv ──────────
+        # EK-1's country lists carry a "HARİÇ SEKTÖRLER" column naming the sections a country is
+        # excluded from; these annexes are what those section codes mean. TaricHive reads EK-1
+        # out of rejim.zip itself (it is .xlsx) but cannot open these — they are legacy .xls, the
+        # same reason the TGTC nomenclature is parsed here. Transcription only: every scope cell
+        # is passed through verbatim and interpreted in the importer.
+        $sectorsCsv = Join-Path $OutputFolder "tr-gsp-sectors.csv"
+        & $py (Join-Path $PSScriptRoot "parse-gsp-sectors.py") $rzip $sectorsCsv
+        if ($LASTEXITCODE -ne 0) { throw "parse-gsp-sectors.py failed (exit $LASTEXITCODE) — see the warnings above." }
+        Write-Host "Wrote tr-gsp-sectors.csv ($([math]::Round((Get-Item $sectorsCsv).Length / 1KB, 0)) KB)"
     }
     finally {
         try { Remove-Item $tmp2 -Recurse -Force } catch { }
