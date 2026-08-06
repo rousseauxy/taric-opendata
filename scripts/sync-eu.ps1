@@ -8,6 +8,9 @@
 param(
     [string]$OutputFolder = "downloads/eu",
     [string[]]$SkipFiles  = @(),
+    # The release's current monthly zip, if it has one. Used to decide whether CIRCABC has
+    # published anything since it was built — see the monthly-ZIP block below.
+    [string]$ExistingZip  = "",
     [switch]$Force
 )
 
@@ -59,13 +62,54 @@ $monthlyZipName = "eu-taric-$zipMonth.zip"
 Write-Host "Syncing CIRCABC TARIC data: $zipMonth ($($monthFolder.Title))"
 
 # ─── Download XLSX files and pack monthly ZIP ─────────────────────────────────
+#
+# The month's folder is NOT complete when it first appears. CIRCABC publishes the core
+# extractions on day 1-3 and fills in the remaining ~20 language files over the following days:
+# August 2026 had 17 spreadsheets when it first showed up and 37 by the end of the month.
+#
+# So "the asset already exists" is the wrong skip condition, and using it froze each month at
+# whatever partial snapshot happened to be there on the first run. That is why TaricHive had no
+# Dutch commodity descriptions at all — `Nomenclature NL.xlsx` lands after our snapshot and the
+# zip could never gain it. July looked fine purely by luck: it was first captured on 1 August,
+# by which point the month was finished.
+#
+# The condition is now content: re-list the folder every run (one cheap API call) and rebuild
+# only when CIRCABC holds a file the existing zip does not. The publish step clobbers, and
+# TaricHive re-imports on its own because the asset digest changes.
 
-if (-not $Force -and $SkipFiles -contains $monthlyZipName) {
-    Write-Host "$monthlyZipName already in release — skipping CIRCABC download."
+$files = @(Get-Children $monthFolder.NodeId | Where-Object { $_.MimeType -match 'spreadsheet|excel' })
+if (-not $files) { Write-Host "No XLSX files found in $($monthFolder.Title)"; exit 0 }
+Write-Host "CIRCABC holds $($files.Count) XLSX file(s) for $($monthFolder.Title)"
+
+# ExistingZip is the release's current copy, downloaded by the workflow when there is one.
+$missingFromZip = $files | Select-Object -ExpandProperty Title
+if (-not $Force -and $ExistingZip -and (Test-Path $ExistingZip)) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zipReader = [System.IO.Compression.ZipFile]::OpenRead($ExistingZip)
+    try   { $have = @($zipReader.Entries | Select-Object -ExpandProperty Name) }
+    finally { $zipReader.Dispose() }
+    $missingFromZip = @($files | Where-Object { $have -notcontains ($_.Title -replace '[<>:"/\\|?*]', '_') } |
+                        Select-Object -ExpandProperty Title)
+    Write-Host "Existing $monthlyZipName has $($have.Count) file(s); CIRCABC has $($missingFromZip.Count) more"
+}
+
+# No copy to compare against, but the release already lists the asset. That happens when the
+# current month's folder is not in CIRCABC yet and we fell back to the previous month's — a
+# finished month, so there is nothing to gain by rebuilding it. Falling through would download
+# ~50 MB on every run for a zip nobody would upload.
+if ($missingFromZip.Count -gt 0 -and -not $Force `
+    -and -not ($ExistingZip -and (Test-Path $ExistingZip)) `
+    -and $SkipFiles -contains $monthlyZipName) {
+    Write-Host "$monthlyZipName already in release and no copy to compare — skipping CIRCABC download."
+    $missingFromZip = @()
+}
+
+if ($missingFromZip.Count -eq 0) {
+    Write-Host "$monthlyZipName is already complete against CIRCABC — skipping download."
+    # Drop the comparison copy so the publish step has nothing to re-upload.
+    if ($ExistingZip -and (Test-Path $ExistingZip)) { Remove-Item $ExistingZip -Force }
 } else {
-    $files = Get-Children $monthFolder.NodeId | Where-Object { $_.MimeType -match 'spreadsheet|excel' }
-    if (-not $files) { Write-Host "No XLSX files found in $($monthFolder.Title)"; exit 0 }
-    Write-Host "Found $($files.Count) XLSX files"
+    Write-Host "Rebuilding $monthlyZipName — new since last capture: $($missingFromZip -join ', ')"
 
     $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "eu-taric-$zipMonth"
     New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null

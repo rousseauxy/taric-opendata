@@ -37,12 +37,36 @@ jobs:
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
 
+      # The monthly zip is rebuilt when CIRCABC has published files it does not contain — the
+      # month's folder fills up over the first couple of weeks. Comparing needs the current
+      # copy, so fetch it; sync-eu.ps1 deletes it again if there is nothing new, which is what
+      # keeps the publish step from re-uploading identical bytes.
+      - name: Fetch the release's current monthly ZIP (for content comparison)
+        id: existingzip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.existing.outputs.tag }}"
+          NAME="eu-taric-$(date -u +%Y-%m).zip"
+          mkdir -p downloads/eu
+          if gh release download "$TAG" -p "$NAME" -D downloads/eu 2>/dev/null; then
+            echo "path=downloads/eu/$NAME" >> "$GITHUB_OUTPUT"
+            echo "Fetched $NAME for comparison"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "No existing $NAME in the release"
+          fi
+
       - name: Download from CIRCABC and daily portal
         shell: pwsh
         run: |
           $force = '${{ github.event.inputs.force }}' -eq 'true'
           $skipFiles = ('${{ steps.existing.outputs.assets }}' -split ',' | Where-Object { $_ -ne '' })
-          $params = @{ OutputFolder = 'downloads/eu'; SkipFiles = $skipFiles }
+          $params = @{
+            OutputFolder = 'downloads/eu'
+            SkipFiles    = $skipFiles
+            ExistingZip  = '${{ steps.existingzip.outputs.path }}'
+          }
           if ($force) { $params['Force'] = $true; $params['SkipFiles'] = @() }
           scripts/sync-eu.ps1 @params
 
@@ -65,7 +89,16 @@ jobs:
           EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/eu/*.zip; do
             name=$(basename "$f")
-            if echo "$EXISTING" | grep -qF "\"$name\""; then
+            # The monthly zip is the one asset that legitimately changes in place: CIRCABC keeps
+            # adding language files to the month for a couple of weeks after it first appears.
+            # sync-eu.ps1 only leaves it here when it rebuilt it, so reaching this branch means
+            # there is genuinely new content — clobber rather than skip. The daily delta zips
+            # (TARIC_*.zip) are immutable and keep the skip.
+            case "$name" in eu-taric-*.zip) MONTHLY=1 ;; *) MONTHLY=0 ;; esac
+            if [ "$MONTHLY" = "1" ]; then
+              echo "Uploading (clobber): $name"
+              gh release upload "$TAG" "$f" --clobber
+            elif echo "$EXISTING" | grep -qF "\"$name\""; then
               echo "Already uploaded: $name"
             else
               echo "Uploading: $name"
