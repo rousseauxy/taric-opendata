@@ -152,11 +152,18 @@ try {
     if (-not $regimeUrl) { Write-Warning "Could not resolve the Import Regime zip URL — skipping tr-measures.csv."; exit 0 }
     Write-Host "Import Regime: $regimeUrl"
 
+    # The sentinel holds the SHA256 of the zip, not its URL.
+    #
+    # It used to hold the URL, and Karar 3350 is a *consolidated* decree: the Ministry
+    # republishes it at the same /data/ path as it is amended through the year. Comparing URLs
+    # therefore compared a constant to itself — tr-measures.csv was pinned to whatever the first
+    # successful parse of the year produced and could not move until a new year's decree changed
+    # the path. Caught by re-parsing the live zip on 2026-08-06: 57,236 rows against the 60,138
+    # in the release, so the source had already moved and nothing noticed.
+    #
+    # Comparing content means downloading first. That is the cost — ~1.3 MB, which is nothing.
     $regimeSentinel = Join-Path $OutputFolder "tr-regime-version.txt"
-    if (-not $Force -and (Test-Path $regimeSentinel) -and (Get-Content $regimeSentinel -Raw).Trim() -eq $regimeUrl) {
-        Write-Host "Import Regime unchanged — skipping."
-        exit 0
-    }
+    $priorHash = if (Test-Path $regimeSentinel) { (Get-Content $regimeSentinel -Raw).Trim() } else { "" }
 
     $tmp2 = Join-Path ([System.IO.Path]::GetTempPath()) "trregime-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Force -Path $tmp2 | Out-Null
@@ -166,11 +173,20 @@ try {
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rzip)) { throw "curl failed downloading the regime zip (exit $LASTEXITCODE)" }
         Write-Host "  downloaded $([math]::Round((Get-Item $rzip).Length / 1MB, 1)) MB"
 
+        $zipHash = (Get-FileHash $rzip -Algorithm SHA256).Hash
+        if (-not $Force -and $zipHash -eq $priorHash) {
+            Write-Host "Import Regime unchanged (SHA256 match) — skipping."
+            exit 0
+        }
+
         & $py -m pip install --quiet --disable-pip-version-check openpyxl 2>&1 | Out-Null
         $measuresCsv = Join-Path $OutputFolder "tr-measures.csv"
         & $py (Join-Path $PSScriptRoot "parse-regime.py") $rzip $measuresCsv
+        # parse-regime.py exits non-zero when an annex it recognised produced no rows — a layout
+        # change, which is not something to publish a quietly-shorter CSV over.
+        if ($LASTEXITCODE -ne 0) { throw "parse-regime.py failed (exit $LASTEXITCODE) — see the warnings above." }
         if ((Test-Path $measuresCsv) -and (Get-Item $measuresCsv).Length -gt 1000) {
-            $regimeUrl | Set-Content $regimeSentinel -NoNewline
+            $zipHash | Set-Content $regimeSentinel -NoNewline
             Write-Host "Wrote tr-measures.csv ($([math]::Round((Get-Item $measuresCsv).Length / 1KB, 0)) KB)"
         } else { Write-Warning "parse-regime.py produced no usable output." }
     }
