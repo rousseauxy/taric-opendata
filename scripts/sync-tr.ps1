@@ -1,4 +1,4 @@
-# Downloads the Turkish Customs Tariff (TGTC — Türk Gümrük Tarife Cetveli) nomenclature from the
+﻿# Downloads the Turkish Customs Tariff (TGTC — Türk Gümrük Tarife Cetveli) nomenclature from the
 # Ministry of Trade and parses it into tr-nomenclature.csv (consumed by TaricHive's TrImporter).
 #   Source: https://ggm.ticaret.gov.tr/ — the annual "İstatistik Pozisyonlarına Bölünmüş Türk
 #           Gümrük Tarife Cetveli", published as a zip of per-chapter legacy .xls files.
@@ -147,9 +147,56 @@ $curlHeaders = @(
     "-H", "Referer: https://ticaret.gov.tr/"
 )
 
+<#
+.SYNOPSIS
+Builds a CA bundle that can verify ticaret.gov.tr, whose server omits its intermediate.
+
+.DESCRIPTION
+The Ministry's TLS endpoint sends only the leaf certificate — "Verify return code: 21 (unable to
+verify the first certificate)". Windows and macOS fetch the missing intermediate themselves from
+the certificate's AIA extension, so this has always worked from a developer machine; OpenSSL does
+not, so on a GitHub Ubuntu runner curl fails with exit 60 and the whole regime sync is skipped as
+"non-fatal". That is how the first run after the publish fix still produced no rejim.zip.
+
+The fix is to supply what the server should have: fetch the intermediate over plain HTTP from the
+URL the leaf itself advertises, and append it to the system trust store. Verification stays on —
+the intermediate is only usable if it chains to a root already trusted, so a forged one is no more
+acceptable than before. Falls back to the system bundle if anything here fails, which reproduces
+today's behaviour rather than making it worse.
+#>
+function Get-TicaretCaBundle {
+    $intermediateUrl = "http://cacerts.geotrust.com/GeoTrustTLSRSACAG1.crt"   # from the leaf's AIA
+    $systemBundle = @(
+        "/etc/ssl/certs/ca-certificates.crt",      # Debian/Ubuntu
+        "/etc/pki/tls/certs/ca-bundle.crt"         # RHEL/Fedora
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $systemBundle) { return $null }       # Windows/macOS resolve AIA themselves
+
+    try {
+        $work = Join-Path ([System.IO.Path]::GetTempPath()) "ticaret-ca-$([guid]::NewGuid().ToString('N'))"
+        New-Item -ItemType Directory -Force -Path $work | Out-Null
+        $der = Join-Path $work "intermediate.crt"
+        curl -fsSL --max-time 60 -o $der $intermediateUrl
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $der)) { return $null }
+
+        $pem = Join-Path $work "intermediate.pem"
+        & openssl x509 -inform DER -in $der -out $pem 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $pem)) { return $null }
+
+        $bundle = Join-Path $work "bundle.pem"
+        Set-Content -Path $bundle -Value ((Get-Content $systemBundle -Raw) + "`n" + (Get-Content $pem -Raw)) -NoNewline
+        Write-Host "  built a CA bundle with the intermediate ticaret.gov.tr does not send"
+        return $bundle
+    }
+    catch { return $null }
+}
+
+$caBundle = Get-TicaretCaBundle
+$curlTls = if ($caBundle) { @("--cacert", $caBundle) } else { @() }
+
 function Resolve-RegimeUrl {
     $page = "https://ticaret.gov.tr/ithalat/ithalat-mevzuati/ithalat-rejimi-karari-igv-karari-ve-ithalat-tebligleri/1-ithalat-rejimi-kararikarar-sayisi3350karar-metni-ve-tablolar-konsolide-edilmis-olup-gunceldir"
-    $html = curl -fsSL @curlHeaders --max-time 30 $page 2>$null
+    $html = curl -fsSL @curlHeaders @curlTls --max-time 30 $page 2>$null
     if ($LASTEXITCODE -eq 0 -and $html) {
         $m = [regex]::Match(($html -join "`n"), 'href="(?<u>[^"]*rejim[^"]*\.zip)"', 'IgnoreCase')
         if ($m.Success) {
@@ -191,7 +238,7 @@ try {
         # Also kept — see the note on tgtc.zip above. This is the archive TaricHive's TrImporter
         # reads directly; tr-measures.csv is published beside it during the transition.
         $rzip = Join-Path $OutputFolder "rejim.zip"
-        curl -fsSL @curlHeaders --max-time 300 -o $rzip ([uri]::EscapeUriString($regimeUrl))
+        curl -fsSL @curlHeaders @curlTls --max-time 300 -o $rzip ([uri]::EscapeUriString($regimeUrl))
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rzip)) { throw "curl failed downloading the regime zip (exit $LASTEXITCODE)" }
         Write-Host "  downloaded $([math]::Round((Get-Item $rzip).Length / 1MB, 1)) MB"
 
