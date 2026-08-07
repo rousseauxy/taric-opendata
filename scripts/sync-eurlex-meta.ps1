@@ -222,7 +222,12 @@ SELECT ?celex WHERE {
             }
             if ($isSec) { $curSec = ($lvlRaw -replace 'SECTION\s+', ''); $code = $curSec; $sec = $curSec }
             else { $code = ($lvlRaw -replace 'CHAPTER\s+', ''); $sec = $curSec }
-            if ($note.Length -gt 4) {
+            # A section or chapter is worth a row for its *title* alone. Requiring a note dropped
+            # every section that has none, and the title went with it: measured in TaricHive, EU
+            # held 9 of the CN's 21 sections and 88 of its 97 chapters. The browser groups chapters
+            # by section correctly either way — it just had no heading text to render for twelve of
+            # them, which is why Türkiye showed a Section I heading and the EU did not.
+            if ($note.Length -gt 4 -or $title.Length -gt 0) {
                 $rows.Add([pscustomobject]@{ Kind = $(if ($isSec) { 'section' } else { 'chapter' }); Code = $code; SectionRoman = $sec; Title = $title; NoteText = $note })
             }
         }
