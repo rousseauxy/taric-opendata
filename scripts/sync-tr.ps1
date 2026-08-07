@@ -56,6 +56,21 @@ else {
 # ─── Download + extract ───────────────────────────────────────────────────────
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "tgtc-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+
+# Mirror the archive even when the nomenclature parse is skipped — see the long note in the
+# regime block below. The sentinel says what we last parsed, not what the release holds, and
+# tgtc.zip joined the publish set after the sentinel was last written, so it has never been
+# uploaded. Fetching 2.6 MB on a run that then does nothing else is the cheap side of this
+# trade.
+if ($skipTgtc -and $zipUrl) {
+    try {
+        $zip = Join-Path $OutputFolder "tgtc.zip"
+        Invoke-WebRequest -Uri ([uri]::EscapeUriString($zipUrl)) -UserAgent $UA -UseBasicParsing -OutFile $zip -TimeoutSec 300
+        Write-Host "  mirrored tgtc.zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB) without re-parsing"
+    }
+    catch { Write-Warning "Could not mirror tgtc.zip (non-fatal): $_" }
+}
+
 if (-not $skipTgtc) {
 try {
     # Kept in the output folder, not the temp dir: the raw archive is published alongside the
@@ -180,14 +195,29 @@ try {
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rzip)) { throw "curl failed downloading the regime zip (exit $LASTEXITCODE)" }
         Write-Host "  downloaded $([math]::Round((Get-Item $rzip).Length / 1MB, 1)) MB"
 
+        # Parse and publish unconditionally. The hash is recorded and logged, not obeyed.
+        #
+        # This used to delete the zip and exit when the hash matched, on the reasoning that it
+        # was "identical to the copy already on the release". There was no copy on the release.
+        # The sentinel had been written by a run predating the archive being published at all,
+        # so from the moment rejim.zip joined the publish set every run matched the hash, deleted
+        # the only copy, and skipped the upload. tr-gsp-sectors.csv went the same way. Neither
+        # has ever appeared, which is why the entire Turkish rewrite is dark — 135,749 measures
+        # against the CSV's 60,138, plus the suspensions, the end-use reliefs and the 62 GSP
+        # beneficiaries — and the run that would have fixed it does not come round until the
+        # Ministry republishes the decree, once a year.
+        #
+        # The shape, which is the fourth variant of it in this repository: a content sentinel
+        # records what we last *processed*, never what the release currently *holds*. Adding a
+        # new published artefact silently invalidates every existing sentinel and nothing detects
+        # it. So the skip is gone rather than patched: --clobber is idempotent, identical bytes
+        # keep their sha256 so TaricHive's content-keyed freshness marker does not move, and the
+        # cost is a 1.3 MB PUT and a few seconds of Python once a week. Getting it wrong cost a
+        # year.
         $zipHash = (Get-FileHash $rzip -Algorithm SHA256).Hash
-        if (-not $Force -and $zipHash -eq $priorHash) {
-            Write-Host "Import Regime unchanged (SHA256 match) — skipping."
-            # Identical to the copy already on the release; drop it so the publish step has
-            # nothing to re-upload.
-            Remove-Item $rzip -Force -ErrorAction SilentlyContinue
-            exit 0
-        }
+        Write-Host $(if ($zipHash -eq $priorHash) {
+            "Import Regime unchanged (SHA256 match) — re-parsing and re-publishing anyway."
+        } else { "Import Regime CHANGED — parsing." })
 
         & $py -m pip install --quiet --disable-pip-version-check openpyxl 2>&1 | Out-Null
         $measuresCsv = Join-Path $OutputFolder "tr-measures.csv"
