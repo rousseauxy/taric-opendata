@@ -287,6 +287,22 @@ try {
         & $py (Join-Path $PSScriptRoot "parse-gsp-sectors.py") $rzip $sectorsCsv
         if ($LASTEXITCODE -ne 0) { throw "parse-gsp-sectors.py failed (exit $LASTEXITCODE) — see the warnings above." }
         Write-Host "Wrote tr-gsp-sectors.csv ($([math]::Round((Get-Item $sectorsCsv).Length / 1KB, 0)) KB)"
+
+        # ── Agricultural component tables (Tablo I + Tablo 2) → tr-agri-components.csv ──────
+        # List III prices its tarım payı as a bare "T1" or "T2" per commodity, and until now
+        # nothing said what either meant: 607 TPY measures rendered with no duty component at
+        # all. Tablo I is the composition grid those codes index (it is the Meursing table —
+        # its 504 cells are the same 504 codes Belgium publishes as additional-code type 7, an
+        # identical set, checked) and Tablo 2 prices each cell in EUR/100 kg net under exactly
+        # those two column headings.
+        #
+        # Parsed here for the usual reason and then some: Tablo I is legacy BIFF and Tablo 2 is
+        # an OLE Word 97 document whose table is split across two text encodings. Transcription
+        # only — the bands and the rates are passed through as written.
+        $agriCsv = Join-Path $OutputFolder "tr-agri-components.csv"
+        & $py (Join-Path $PSScriptRoot "parse-tr-agri.py") $rzip $agriCsv
+        if ($LASTEXITCODE -ne 0) { throw "parse-tr-agri.py failed (exit $LASTEXITCODE) — see the warnings above." }
+        Write-Host "Wrote tr-agri-components.csv ($([math]::Round((Get-Item $agriCsv).Length / 1KB, 0)) KB)"
     }
     finally {
         try { Remove-Item $tmp2 -Recurse -Force } catch { }

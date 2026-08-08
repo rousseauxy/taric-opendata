@@ -76,6 +76,10 @@ jobs:
           [ -f downloads/tr/tr-notes.csv ] && gh release upload "$TAG" downloads/tr/tr-notes.csv --clobber || true
           [ -f downloads/tr/tr-measures.csv ] && gh release upload "$TAG" downloads/tr/tr-measures.csv --clobber || true
           [ -f downloads/tr/tr-gsp-sectors.csv ] && gh release upload "$TAG" downloads/tr/tr-gsp-sectors.csv --clobber || true
+          # Listed explicitly like the rest: a file this workflow produces but does not name here
+          # is written on the runner and thrown away, which is exactly how rejim.zip stayed off
+          # the release for weeks while every run reported success.
+          [ -f downloads/tr/tr-agri-components.csv ] && gh release upload "$TAG" downloads/tr/tr-agri-components.csv --clobber || true
           [ -f downloads/tr/tr-regime-version.txt ] && gh release upload "$TAG" downloads/tr/tr-regime-version.txt --clobber || true
 
           # The publisher's own archives, mirrored rather than only derived from. TaricHive's
