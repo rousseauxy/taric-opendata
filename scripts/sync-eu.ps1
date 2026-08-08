@@ -1,4 +1,4 @@
-# Downloads EU TARIC data from two sources:
+﻿# Downloads EU TARIC data from two sources:
 #   Monthly XLSX extractions from CIRCABC (European Commission DG TAXUD).
 #     Source: https://circabc.europa.eu/ui/group/0e5f18c2-4b2f-42e9-aed4-dfe50ae1263b/library/64db9d0f-e7c9-4084-afe9-f47e70e53c10
 #     Access: Alfresco guest authentication (public content, no login required).
@@ -23,8 +23,33 @@ $BaseUrl = "https://circabc.europa.eu/service/api/node/workspace/SpacesStore"
 $UA      = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 $Headers = @{ Authorization = "Basic $([Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes('guest:')))" }
 
+# Both publishers stall occasionally, and a stall used to fail the whole run: on 2026-08-08 the
+# listing fetch below hit its 30-second timeout, the job went red, and the CIRCABC work it had
+# already finished was thrown away with it. Nothing was actually missing — the Commission had not
+# published that day's delta yet (they land ~19:1x) and the next run recovers anything unpublished
+# anyway, because the skip list is derived from the release's own assets. So the cost was a false
+# red rather than lost data, which is precisely the kind of noise that trains people to ignore a
+# failing sync.
+#
+# Four attempts with exponential backoff, matching sync-eurlex-meta.ps1. Deliberately still throws
+# on the last one: a publisher that is genuinely down must fail loudly, not silently produce a
+# partial release.
+function Invoke-WithRetry {
+    param([scriptblock]$Action, [string]$What)
+    for ($try = 1; $try -le 4; $try++) {
+        try { return & $Action }
+        catch {
+            if ($try -eq 4) { throw }
+            Write-Host "  $What retry $try after: $($_.Exception.Message)"
+            Start-Sleep -Seconds ([math]::Pow(2, $try))
+        }
+    }
+}
+
 function Get-Children($nodeId) {
-    $r = Invoke-WebRequest -Uri "$BaseUrl/$nodeId/children" -UserAgent $UA -UseBasicParsing -Headers $Headers -TimeoutSec 30
+    $r = Invoke-WithRetry -What "CIRCABC children" -Action {
+        Invoke-WebRequest -Uri "$BaseUrl/$nodeId/children" -UserAgent $UA -UseBasicParsing -Headers $Headers -TimeoutSec 30
+    }
     ([xml]$r.Content).feed.entry | ForEach-Object {
         $cmis = ($_.link | Where-Object { $_.rel -eq 'self' }).href
         [PSCustomObject]@{
@@ -119,8 +144,11 @@ if ($missingFromZip.Count -eq 0) {
         $safeName = $f.Title -replace '[<>:"/\\|?*]', '_'
         $outPath  = Join-Path $tmpDir $safeName
         Write-Host "  $($f.Title)..." -NoNewline
-        Invoke-WebRequest -Uri "$BaseUrl/$($f.NodeId)/content" -UserAgent $UA -UseBasicParsing -Headers $Headers `
-            -OutFile $outPath -TimeoutSec 120
+        Invoke-WithRetry -What $f.Title -Action {
+            if (Test-Path $outPath) { Remove-Item $outPath -Force }
+            Invoke-WebRequest -Uri "$BaseUrl/$($f.NodeId)/content" -UserAgent $UA -UseBasicParsing -Headers $Headers `
+                -OutFile $outPath -TimeoutSec 120
+        }
         Write-Host " $([math]::Round((Get-Item $outPath).Length / 1KB, 0)) KB"
         $count++
     }
@@ -142,7 +170,9 @@ if ($missingFromZip.Count -eq 0) {
 $DailyBase = "https://ec.europa.eu/taxation_customs/dds2/taric"
 Write-Host ""
 Write-Host "Syncing TARIC daily delta updates..."
-$dailyHtml = (Invoke-WebRequest -Uri "$DailyBase/daily_publications.jsp?Lang=en" -UseBasicParsing -UserAgent $UA -TimeoutSec 30).Content
+$dailyHtml = (Invoke-WithRetry -What "daily listing" -Action {
+    Invoke-WebRequest -Uri "$DailyBase/daily_publications.jsp?Lang=en" -UseBasicParsing -UserAgent $UA -TimeoutSec 30
+}).Content
 
 $dailyEntries = [System.Text.RegularExpressions.Regex]::Matches(
     $dailyHtml,
@@ -162,7 +192,12 @@ foreach ($e in $dailyEntries) {
     $outPath = Join-Path $OutputFolder $e.ZipName
     if (-not $Force -and ($SkipFiles -contains $e.ZipName -or (Test-Path $outPath))) { $skipCount++; continue }
     Write-Host "  $($e.ZipName)  ($($e.PubDate))..." -NoNewline
-    Invoke-WebRequest -Uri $e.Url -UserAgent $UA -UseBasicParsing -OutFile $outPath -TimeoutSec 60
+    # A stalled delta leaves a truncated .zip behind, and the next run would skip it as "already
+    # present" — so the partial file goes before the retry, not after.
+    Invoke-WithRetry -What $e.ZipName -Action {
+        if (Test-Path $outPath) { Remove-Item $outPath -Force }
+        Invoke-WebRequest -Uri $e.Url -UserAgent $UA -UseBasicParsing -OutFile $outPath -TimeoutSec 60
+    }
     Write-Host " $([math]::Round((Get-Item $outPath).Length / 1KB, 0)) KB"
     $dlCount++
 }
@@ -176,7 +211,9 @@ Write-Host "Daily deltas downloaded: $dlCount"
 $CmisBase = "https://circabc.europa.eu/service/cmis/s/workspace:SpacesStore/i"
 
 function Get-CircabcChildren($nodeId) {
-    $r = Invoke-WebRequest -Uri "$CmisBase/$nodeId/children" -UserAgent $UA -UseBasicParsing -Headers $Headers -TimeoutSec 30
+    $r = Invoke-WithRetry -What "CIRCABC CMIS children" -Action {
+        Invoke-WebRequest -Uri "$CmisBase/$nodeId/children" -UserAgent $UA -UseBasicParsing -Headers $Headers -TimeoutSec 30
+    }
     ([xml]$r.Content).feed.entry | ForEach-Object {
         $href = ($_.link | Where-Object { $_.rel -eq 'self' }).href
         $href -match 'i/([0-9a-f-]{36})' | Out-Null
@@ -201,7 +238,10 @@ foreach ($item in (Get-CircabcChildren '3fdd730a-0988-4b75-bab5-5f416022452c') |
         Write-Host "  Already exists: $safeName"; $refSkip++; continue
     }
     Write-Host "  Downloading: $($item.Title)..."
-    Invoke-WebRequest -Uri "$BaseUrl/$($item.NodeId)/content" -UserAgent $UA -UseBasicParsing -Headers $Headers -OutFile $outPath -TimeoutSec 60
+    Invoke-WithRetry -What $safeName -Action {
+        if (Test-Path $outPath) { Remove-Item $outPath -Force }
+        Invoke-WebRequest -Uri "$BaseUrl/$($item.NodeId)/content" -UserAgent $UA -UseBasicParsing -Headers $Headers -OutFile $outPath -TimeoutSec 60
+    }
     $downloaded += $safeName; $refCount++
     Write-Host "    -> $([math]::Round((Get-Item $outPath).Length / 1KB, 0)) KB"
 }
@@ -218,7 +258,10 @@ foreach ($folder in (Get-CircabcChildren '3de7201f-51e1-4379-8f45-6cce273e97f0')
             Write-Host "    Already exists: $safeName"; $refSkip++; continue
         }
         Write-Host "    Downloading: $($item.Title)..."
-        Invoke-WebRequest -Uri "$BaseUrl/$($item.NodeId)/content" -UserAgent $UA -UseBasicParsing -Headers $Headers -OutFile $outPath -TimeoutSec 60
+        Invoke-WithRetry -What $safeName -Action {
+            if (Test-Path $outPath) { Remove-Item $outPath -Force }
+            Invoke-WebRequest -Uri "$BaseUrl/$($item.NodeId)/content" -UserAgent $UA -UseBasicParsing -Headers $Headers -OutFile $outPath -TimeoutSec 60
+        }
         $downloaded += $safeName; $refCount++
         Write-Host "      -> $([math]::Round((Get-Item $outPath).Length / 1KB, 0)) KB"
     }
