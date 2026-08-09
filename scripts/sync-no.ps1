@@ -10,6 +10,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
+
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -60,7 +62,9 @@ $datasetIds = @(
 $downloaded = @()
 foreach ($id in $datasetIds) {
     Write-Host "Fetching CKAN package: $id"
-    $pkg = Invoke-RestMethod -Uri "$CkanBase/package_show?id=$id" -UseBasicParsing
+    $pkg = Invoke-WithRetry -What "CKAN $id" -Action {
+        Invoke-RestMethod -Uri "$CkanBase/package_show?id=$id" -UseBasicParsing -TimeoutSec 60
+    }
 
     if (-not $pkg.success) {
         Write-Warning "CKAN returned failure for package '$id'. Skipping."
@@ -88,14 +92,15 @@ foreach ($id in $datasetIds) {
         }
 
         Write-Host "Downloading: $filename"
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing
-            $downloaded += $filename
-            Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
-        } catch {
-            Write-Warning "Failed: $filename — $_"
-            if (Test-Path $outPath) { Remove-Item $outPath }
-        }
+        # Retries, then throws. It used to warn and carry on, which is worse than it sounds here:
+        # the publish step uploads whatever is in the folder with --clobber and leaves every other
+        # release asset alone, so a skipped file is not absent from the release, it is SILENTLY
+        # STALE — and the content-keyed freshness marker then sees it unchanged and does not
+        # re-import it. That is the "reported success while publishing nothing" family this
+        # pipeline has already produced four times.
+        Invoke-Download -Uri $url -OutFile $outPath -What $filename
+        $downloaded += $filename
+        Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
     }
 }
 

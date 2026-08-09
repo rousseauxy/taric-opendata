@@ -13,6 +13,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
+
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -65,7 +67,7 @@ New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 if ($skipTgtc -and $zipUrl) {
     try {
         $zip = Join-Path $OutputFolder "tgtc.zip"
-        Invoke-WebRequest -Uri ([uri]::EscapeUriString($zipUrl)) -UserAgent $UA -UseBasicParsing -OutFile $zip -TimeoutSec 300
+        Invoke-Download -Uri ([uri]::EscapeUriString($zipUrl)) -OutFile $zip -UserAgent $UA -What "TGTC zip"
         Write-Host "  mirrored tgtc.zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB) without re-parsing"
     }
     catch { Write-Warning "Could not mirror tgtc.zip (non-fatal): $_" }
@@ -79,7 +81,7 @@ try {
     # csv rather than the Ministry's bytes — so a parser regression that dropped rows looked
     # exactly like the publisher having fewer of them. Costs 2.6 MB.
     $zip = Join-Path $OutputFolder "tgtc.zip"
-    Invoke-WebRequest -Uri ([uri]::EscapeUriString($zipUrl)) -UserAgent $UA -UseBasicParsing -OutFile $zip -TimeoutSec 300
+    Invoke-Download -Uri ([uri]::EscapeUriString($zipUrl)) -OutFile $zip -UserAgent $UA -What "regime zip"
     Write-Host "  downloaded $([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB"
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem

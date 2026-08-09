@@ -7,6 +7,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
+
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -89,7 +91,9 @@ $tables   = @(
 Write-Host "Resolving latest UK tariff version..."
 $versionId = "latest"
 try {
-    $versions = Invoke-RestMethod -Uri "$ApiBase/versions?format=json" -UseBasicParsing
+    $versions = Invoke-WithRetry -What "UKGT versions" -Action {
+        Invoke-RestMethod -Uri "$ApiBase/versions?format=json" -UseBasicParsing -TimeoutSec 60
+    }
     if ($versions.versions -and $versions.versions.Count -gt 0) {
         $versionId = $versions.versions[0].id
     }
@@ -112,7 +116,7 @@ foreach ($table in $tables) {
     $url = "$ApiBase/versions/latest/tables/$table/data?format=csv&download"
     Write-Host "Downloading: $filename"
     try {
-        Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing
+        Invoke-Download -Uri $url -OutFile $outPath
         $sizeMB = [math]::Round((Get-Item $outPath).Length / 1MB, 1)
         Write-Host "  -> ${sizeMB} MB"
         $downloaded += $filename

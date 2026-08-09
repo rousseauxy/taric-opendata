@@ -12,6 +12,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
+
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -20,7 +22,9 @@ $UA      = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 # ─── Check current revision ───────────────────────────────────────────────────
 
-$rel = (Invoke-WebRequest -Uri "$BaseUrl/currentRelease" -UserAgent $UA -UseBasicParsing -TimeoutSec 15).Content |
+$rel = (Invoke-WithRetry -What "HTS currentRelease" -Action {
+    Invoke-WebRequest -Uri "$BaseUrl/currentRelease" -UserAgent $UA -UseBasicParsing -TimeoutSec 30
+}).Content |
     ConvertFrom-Json
 $release = $rel.name    # e.g. "2026HTSRev10"
 Write-Host "Current HTS release: $release ($($rel.title))"

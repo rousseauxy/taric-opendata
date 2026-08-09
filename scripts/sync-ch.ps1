@@ -9,6 +9,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
+
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -37,7 +39,9 @@ foreach ($fileName in $files) {
     if (-not $Force -and (Test-Path $outPath) -and (Test-Path $etagPath)) {
         $storedEtag = Get-Content $etagPath -Raw
         try {
-            $head = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -MaximumRedirection 5
+            $head = Invoke-WithRetry -What "HEAD $name" -Action {
+                Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 60
+            }
             $currentEtag = ($head.Headers['ETag'] | Select-Object -First 1)
             if ($currentEtag -and $currentEtag -eq $storedEtag.Trim()) {
                 Write-Host "Unchanged: $fileName"
