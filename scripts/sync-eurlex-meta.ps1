@@ -39,6 +39,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -47,13 +48,8 @@ $LangBase = "http://publications.europa.eu/resource/authority/language/"
 
 function Invoke-Sparql([string]$Query) {
     $body = @{ query = $Query; format = "application/sparql-results+json" }
-    for ($try = 1; $try -le 4; $try++) {
-        try { return Invoke-RestMethod -Uri $Endpoint -Method Post -Body $body -TimeoutSec 280 }
-        catch {
-            if ($try -eq 4) { throw }
-            Write-Host "  SPARQL retry $try after error: $($_.Exception.Message)"
-            Start-Sleep -Seconds ([math]::Pow(2, $try))
-        }
+    Invoke-WithRetry -What "SPARQL" -Action {
+        Invoke-RestMethod -Uri $Endpoint -Method Post -Body $body -TimeoutSec 280
     }
 }
 
@@ -165,8 +161,9 @@ SELECT ?celex WHERE {
     } else {
         $cnenUrl  = "http://publications.europa.eu/resource/celex/$([uri]::EscapeDataString($cnenCelex))"
         $cnenPath = Join-Path $OutputFolder "cnen-en.html"
-        Invoke-WebRequest -Uri $cnenUrl -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 300 `
-            -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = "eng" } -OutFile $cnenPath
+        Invoke-Download -Uri $cnenUrl -OutFile $cnenPath -What "cnen-en.html" -TimeoutSec 300 `
+            -MaximumRedirection 8 `
+            -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = "eng" }
         Write-Host "  cnen-en.html -> $([math]::Round((Get-Item $cnenPath).Length / 1MB, 1)) MB"
         $cnenDate | Set-Content $cnenSentinel -NoNewline
     }
@@ -197,8 +194,10 @@ SELECT ?celex WHERE {
         Write-Host "  CN notes unchanged ($cnDate) — skipping."
     } else {
         $cnUrl = "http://publications.europa.eu/resource/celex/$([uri]::EscapeDataString($cnCelex))"
-        $h = (Invoke-WebRequest -Uri $cnUrl -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 300 `
-                -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = "eng" }).Content
+        $h = (Invoke-WithRetry -What "CN notes HTML" -Action {
+            Invoke-WebRequest -Uri $cnUrl -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 300 `
+                -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = "eng" }
+        }).Content
 
         $Clean = { param($s) $s = $s -replace '<[^>]*>', ' '; $s = [System.Net.WebUtility]::HtmlDecode($s); ($s -replace '\s+', ' ').Trim() }
         $mk = [regex]::Matches($h, '<span class="italics">\s*(SECTION\s+[IVXL]+|CHAPTER\s+\d+)\s*</span>')

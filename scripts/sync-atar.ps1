@@ -16,6 +16,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -23,10 +24,9 @@ $Base = "https://www.tax.service.gov.uk/search-for-advance-tariff-rulings"
 $UA   = "taric-opendata/1.0 (+https://github.com/rousseauxy/taric-opendata)"
 
 function Get-Html([string]$Url) {
-    for ($t = 1; $t -le 4; $t++) {
-        try { return (Invoke-WebRequest -Uri $Url -UserAgent $UA -UseBasicParsing -TimeoutSec 60).Content }
-        catch { if ($t -eq 4) { throw }; Start-Sleep -Seconds ([math]::Pow(2, $t)) }
-    }
+    (Invoke-WithRetry -What $Url -Action {
+        Invoke-WebRequest -Uri $Url -UserAgent $UA -UseBasicParsing -TimeoutSec 60
+    }).Content
 }
 function Clean([string]$s) {
     $s = $s -replace '<[^>]*>', ' '

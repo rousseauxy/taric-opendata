@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -37,9 +38,28 @@ if ($SkipFiles.Count -gt 0) {
     Write-Host "Release already holds: $($SkipFiles -join ', ') — downloading anyway to compare."
 }
 
+$tmpFile = Join-Path $OutputFolder "isztar4-base.zip.tmp"
+
+# The three steps retry as ONE unit, which is the only shape that can work here.
+#
+# This is a JSF conversation: the GET establishes a jsessionid and a ViewState, the checkbox POST
+# consumes that ViewState and issues a new one, and the download POST consumes that. A ViewState
+# is single-use, so retrying an individual POST would post a token the server has already spent
+# and get "view expired" rather than the file. Retrying from the GET gets a fresh session and a
+# fresh token, which is what a browser would do.
+#
+# The size and ZIP-magic checks are inside the block deliberately: ISZTAR4 streams a 220 MB zip
+# it generates on the fly over several minutes, so a truncated or error-page response is exactly
+# the failure worth another attempt, and until now it threw and lost the day.
+Invoke-WithRetry -What "ISZTAR4 conversation" -Action {
+
 # Step 1: GET page — extract form action URL (contains jsessionid) and ViewState
 Write-Host "Loading ISZTAR4 XmlExtractions page..."
-$page = Invoke-WebRequest -Uri $PageUrl -UseBasicParsing -MaximumRedirection 10 -SessionVariable sess
+# A previous attempt can have left a partial .tmp behind, and step 3 writes to that same path.
+if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }
+# $sess stays local to this scriptblock, which is exactly right — steps 2 and 3 are inside it
+# too, and a fresh attempt must not inherit the spent session from the last one.
+$page = Invoke-WebRequest -Uri $PageUrl -UseBasicParsing -MaximumRedirection 10 -SessionVariable sess -TimeoutSec 120
 
 $formAction = [regex]::Match($page.Content, '<form[^>]+action="(/taryfa_celna/XmlExtractions[^"]+)"').Groups[1].Value
 if (-not $formAction) { throw "Could not find form action URL" }
@@ -71,7 +91,6 @@ if ($ajaxResp.Content -match '<update id="j_id1:javax\.faces\.ViewState[^"]*"><!
 
 # Step 3: AJAX POST — click download button; server streams ZIP as response
 Write-Host "Requesting startup file download (this takes a few minutes — generating 7+ GB XML on-the-fly)..."
-$tmpFile = Join-Path $OutputFolder "isztar4-base.zip.tmp"
 Invoke-WebRequest -Uri $postUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
     -Body ("xmlExtractionsControllerForm=xmlExtractionsControllerForm" +
            "&xmlExtractionsControllerForm%3ArememberMe_input=on" +
@@ -94,6 +113,8 @@ $magic = [System.IO.File]::ReadAllBytes($tmpFile)[0..3]
 if ($magic[0] -ne 0x50 -or $magic[1] -ne 0x4B) {
     Remove-Item $tmpFile; throw "Downloaded file is not a ZIP (magic: $($magic -join ' '))"
 }
+
+} | Out-Null   # end of the retried ISZTAR4 conversation
 
 # Change detection: compare SHA256 with previously stored hash
 $newHash = (Get-FileHash $tmpFile -Algorithm SHA256).Hash

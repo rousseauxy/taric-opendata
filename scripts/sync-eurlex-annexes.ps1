@@ -19,6 +19,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -29,7 +30,9 @@ $Celex = "32015R2447"
 
 Write-Host "Querying EUR-Lex for latest consolidated version of $Celex ($Language)..."
 $allUrl  = "https://eur-lex.europa.eu/legal-content/$Language/ALL/?uri=CELEX:$Celex"
-$allHtml = (Invoke-WebRequest -Uri $allUrl -UserAgent $UA -UseBasicParsing -TimeoutSec 30).Content
+$allHtml = (Invoke-WithRetry -What "$Celex ALL page" -Action {
+    Invoke-WebRequest -Uri $allUrl -UserAgent $UA -UseBasicParsing -TimeoutSec 30
+}).Content
 
 # Consolidated CELEX IDs look like 02015R2447-20XXXXXX
 $consolPattern = "0$($Celex.Substring(1))-(\d{8})"
@@ -62,7 +65,9 @@ if (-not $Force -and (Test-Path $versionFile)) {
 
 $htmlUrl = "https://eur-lex.europa.eu/legal-content/$Language/TXT/HTML/?uri=CELEX:$latestCelex"
 Write-Host "Downloading HTML: $htmlUrl"
-$html = (Invoke-WebRequest -Uri $htmlUrl -UserAgent $UA -UseBasicParsing -TimeoutSec 120).Content
+$html = (Invoke-WithRetry -What "$latestCelex HTML" -Action {
+    Invoke-WebRequest -Uri $htmlUrl -UserAgent $UA -UseBasicParsing -TimeoutSec 120
+}).Content
 Write-Host "Downloaded: $([math]::Round($html.Length / 1KB, 0)) KB"
 
 # ─── Locate BIJLAGE 23-01 section ────────────────────────────────────────────

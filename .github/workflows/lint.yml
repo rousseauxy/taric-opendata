@@ -1,0 +1,26 @@
+name: Lint
+
+# The first non-sync workflow in this repo. Every publisher blips, and an HTTP call without a
+# retry turns a blip into a lost day's data — or, when it lands mid-publish, into a release
+# holding half of one run and half of another. The sweep to guard those calls has been done by
+# hand twice and missed seven scripts the second time, which is what this replaces.
+on:
+  push:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/lint.yml'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/lint.yml'
+  workflow_dispatch:
+
+jobs:
+  retry-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every HTTP call in a sync script must be retried
+        shell: pwsh
+        run: scripts/Test-HttpRetryCoverage.ps1 -ScriptDirectory scripts

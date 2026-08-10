@@ -26,17 +26,32 @@ Set-StrictMode -Version Latest
     Four attempts with 2, 4 and 8 second waits. It rethrows rather than returning a failure: a
     publisher that is genuinely down has to fail the job loudly rather than let it publish a
     partial release.
+
+.PARAMETER NoRetryStatus
+    HTTP status codes to give up on immediately instead of retrying, because they are an answer
+    rather than a failure. Backing off three times over a 404 costs 14 seconds and cannot change
+    the outcome — which matters where a miss is routine: sync-eurlex-full asks EUR-Lex for
+    thousands of CELEX ids knowing many have no text in a given language, and sync-tr probes for
+    a year page the Ministry may not have published yet.
 #>
 function Invoke-WithRetry {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][scriptblock]$Action,
         [Parameter(Mandatory)][string]$What,
-        [int]$Attempts = 4
+        [int]$Attempts = 4,
+        [int[]]$NoRetryStatus = @()
     )
     for ($try = 1; $try -le $Attempts; $try++) {
         try { return & $Action }
         catch {
+            if ($NoRetryStatus.Count -gt 0) {
+                $response = $_.Exception.PSObject.Properties['Response']
+                if ($response -and $response.Value) {
+                    $status = [int]$response.Value.StatusCode
+                    if ($NoRetryStatus -contains $status) { throw }
+                }
+            }
             if ($try -eq $Attempts) { throw }
             Write-Host "  $What retry $try after: $($_.Exception.Message)"
             Start-Sleep -Seconds ([math]::Pow(2, $try))
@@ -62,16 +77,28 @@ function Invoke-Download {
         [string]$What,
         [int]$TimeoutSec = 300,
         [hashtable]$Headers,
-        [string]$UserAgent
+        [string]$UserAgent,
+        # PowerShell's own default is 5. Exposed because EUR-Lex resolves a CELEX through a
+        # longer redirect chain than that, and silently inheriting the default would turn a
+        # working download into a failure that looks like the publisher's fault.
+        [int]$MaximumRedirection = 5
     )
     if (-not $What) { $What = Split-Path $OutFile -Leaf }
 
     Invoke-WithRetry -What $What -Action {
         if (Test-Path $OutFile) { Remove-Item $OutFile -Force }
-        $args = @{ Uri = $Uri; OutFile = $OutFile; UseBasicParsing = $true; TimeoutSec = $TimeoutSec }
-        if ($Headers)   { $args['Headers']   = $Headers }
-        if ($UserAgent) { $args['UserAgent'] = $UserAgent }
-        Invoke-WebRequest @args
+        # Not $args: that is PowerShell's automatic argument array, and assigning to it inside a
+        # scriptblock is asking for a splat that carries something nobody put there.
+        $req = @{
+            Uri                = $Uri
+            OutFile            = $OutFile
+            UseBasicParsing    = $true
+            TimeoutSec         = $TimeoutSec
+            MaximumRedirection = $MaximumRedirection
+        }
+        if ($Headers)   { $req['Headers']   = $Headers }
+        if ($UserAgent) { $req['UserAgent'] = $UserAgent }
+        Invoke-WebRequest @req
     } | Out-Null
 }
 

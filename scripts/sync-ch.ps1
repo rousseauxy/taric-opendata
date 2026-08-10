@@ -53,7 +53,14 @@ foreach ($fileName in $files) {
 
     Write-Host "Downloading $fileName..."
     try {
-        $r = Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing -MaximumRedirection 5 -PassThru
+        # Not Invoke-Download: the ETag off the response is what change detection stores, so the
+        # response object has to come back. The partial delete it does is reproduced here, and it
+        # matters for the same reason — the caller skips a file that already exists, so a retry
+        # against its own truncated copy would look like success and be skipped forever after.
+        $r = Invoke-WithRetry -What $fileName -Action {
+            if (Test-Path $outPath) { Remove-Item $outPath -Force }
+            Invoke-WebRequest -Uri $url -OutFile $outPath -UseBasicParsing -MaximumRedirection 5 -PassThru -TimeoutSec 300
+        }
         $etag = ($r.Headers['ETag'] | Select-Object -First 1)
         if ($etag) { $etag | Set-Content $etagPath }
         $downloaded += $fileName

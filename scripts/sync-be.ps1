@@ -21,6 +21,8 @@ param(
     [switch]   $Debug
 )
 
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
+
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -51,7 +53,7 @@ function Get-StaticFile {
     if (-not $Force -and ($SkipFiles -contains $FileName)) { Write-Host "  $FileName already in release, skipping" -ForegroundColor Gray; return }
     if (-not $Force -and (Test-Path $outPath))            { Write-Host "  $FileName already on disk, skipping"  -ForegroundColor Yellow; return }
     try {
-        Invoke-WebRequest -Uri $Url -OutFile $outPath -UseBasicParsing -UserAgent $UA -ErrorAction Stop
+        Invoke-Download -Uri $Url -OutFile $outPath -UserAgent $UA -What $FileName
         Write-Host ("  Downloaded {0}: {1:N2} KB" -f $FileName, ((Get-Item $outPath).Length / 1KB)) -ForegroundColor Green
     } catch {
         Write-Host "  Failed $FileName : $($_.Exception.Message)" -ForegroundColor Red
@@ -59,11 +61,24 @@ function Get-StaticFile {
 }
 
 try {
+  # Steps 1 and 2 retry as ONE unit, and step 2's failure is now fatal. Two separate reasons.
+  #
+  # The unit, because this is a JSF conversation: the search reuses the jsessionid and ViewState
+  # the initial page established, and a ViewState does not survive being posted twice. Re-running
+  # a single step with a spent token gets "view expired", so only a fresh conversation can
+  # succeed. The state comes back as a hashtable rather than through $script:, because a
+  # scriptblock's assignments are local and would otherwise be silently discarded.
+  #
+  # Fatal, because the search sat in a catch that logged in red and carried on with zero links —
+  # so a portal outage produced "Downloaded: 0 extraction file(s)", exit 0, a green job, and a
+  # published release containing only the two static files. Finding no files is a legitimate
+  # outcome the portal states; failing to ask is not, and the two must not look alike.
+  $conv = Invoke-WithRetry -What "TARBEL conversation" -Action {
     # ─── Step 1: initial page → ViewState + jsessionid ────────────────────────
     Write-Host "[1/3] Loading initial page and extracting form data..." -ForegroundColor Cyan
     $currentDate = Get-Date -Format "yyyyMMdd"
     $response = Invoke-WebRequest -Uri "$BaseUrl/XmlExtractions?date=$currentDate&lang=EN" `
-        -UseBasicParsing -SessionVariable session -UserAgent $UA -ErrorAction Stop
+        -UseBasicParsing -SessionVariable session -UserAgent $UA -ErrorAction Stop -TimeoutSec 120
 
     if ($Debug) { $response.Content | Out-File "$env:TEMP\initial-page.html" -Encoding UTF8 }
 
@@ -85,7 +100,7 @@ try {
     try {
         Write-Host "  Searching: $searchYear-$monthStr..." -NoNewline
         $searchUrl = "$BaseUrl/XmlExtractions?date=$currentDate&lang=EN&page=1&searchMonth=$monthStr&searchYear=$searchYear"
-        $searchResponse = Invoke-WebRequest -Uri $searchUrl -WebSession $session -UseBasicParsing -ErrorAction Stop
+        $searchResponse = Invoke-WebRequest -Uri $searchUrl -WebSession $session -UseBasicParsing -ErrorAction Stop -TimeoutSec 120
 
         if ($searchResponse.Content -match 'action="(/extTariffBrowser/XmlExtractions;jsessionid=[^"]+)"') {
             $formActionUrl = "$Host_$($matches[1])"
@@ -136,8 +151,26 @@ try {
         $newViewState = Get-JSFViewState -HtmlContent $searchResponse.Content
         if ($newViewState) { $viewState = $newViewState }
     } catch {
+        # Rethrown, not logged and swallowed. This is the line that made a portal outage
+        # indistinguishable from a quiet month.
         Write-Host " Error: $($_.Exception.Message)" -ForegroundColor Red
+        throw "TARBEL search for $searchYear-$monthStr failed: $($_.Exception.Message)"
     }
+
+    @{
+        Session       = $session
+        ViewState     = $viewState
+        FormActionUrl = $formActionUrl
+        Links         = $allDownloadLinks
+        CurrentDate   = $currentDate
+    }
+  }
+
+    $session          = $conv.Session
+    $viewState        = $conv.ViewState
+    $formActionUrl    = $conv.FormActionUrl
+    $allDownloadLinks = $conv.Links
+    $currentDate      = $conv.CurrentDate
 
     # ─── Step 3: download each extraction file (browser-style navigation POST) ─
     Write-Host "`n[3/3] Downloading extraction file(s)..." -ForegroundColor Cyan
@@ -182,19 +215,28 @@ try {
             $session.Headers.Remove('X-Requested-With') | Out-Null
             $session.Headers.Remove('Faces-Request') | Out-Null
 
-            $tempResponse = Invoke-WebRequest -Uri $formActionUrl -Method Post -Headers $downloadHeaders `
-                -ContentType 'application/x-www-form-urlencoded' -Body $formBody -WebSession $session `
-                -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue
-
-            $contentType = $tempResponse.Headers['Content-Type']
-            if ($contentType -like '*application/zip*' -or $contentType -like '*application/octet-stream*') {
-                [System.IO.File]::WriteAllBytes($outputPath, $tempResponse.Content)
-                Write-Host ("    Downloaded: {0:N2} KB" -f ((Get-Item $outputPath).Length / 1KB)) -ForegroundColor Green
-                $downloaded++
-                $session.MaximumRedirection = -1
-            } else {
-                throw "Received '$contentType' instead of a file download"
+            # Safe to retry a single file, unlike the conversation above: the loop already posts
+            # the same $viewState once per file, so this portal plainly accepts it more than
+            # once. -ErrorAction SilentlyContinue means a transport failure lands as a null or
+            # wrong-content-type response rather than an exception, so the content-type check
+            # below is what has to throw for the retry to see anything at all.
+            $tempResponse = Invoke-WithRetry -What $link.FileName -Action {
+                $r = Invoke-WebRequest -Uri $formActionUrl -Method Post -Headers $downloadHeaders `
+                    -ContentType 'application/x-www-form-urlencoded' -Body $formBody -WebSession $session `
+                    -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue -TimeoutSec 300
+                $ct = $r.Headers['Content-Type']
+                if ($ct -notlike '*application/zip*' -and $ct -notlike '*application/octet-stream*') {
+                    throw "Received '$ct' instead of a file download"
+                }
+                $r
             }
+
+            # The content type was already asserted inside the retry above — reaching here means
+            # a real file — so this just writes it.
+            [System.IO.File]::WriteAllBytes($outputPath, $tempResponse.Content)
+            Write-Host ("    Downloaded: {0:N2} KB" -f ((Get-Item $outputPath).Length / 1KB)) -ForegroundColor Green
+            $downloaded++
+            $session.MaximumRedirection = -1
         } catch {
             Write-Host "    Failed: $($_.Exception.Message)" -ForegroundColor Red; $failed++
         }

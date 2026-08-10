@@ -15,6 +15,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -34,18 +35,6 @@ $Headers = @{ Authorization = "Basic $([Convert]::ToBase64String([Text.Encoding]
 # Four attempts with exponential backoff, matching sync-eurlex-meta.ps1. Deliberately still throws
 # on the last one: a publisher that is genuinely down must fail loudly, not silently produce a
 # partial release.
-function Invoke-WithRetry {
-    param([scriptblock]$Action, [string]$What)
-    for ($try = 1; $try -le 4; $try++) {
-        try { return & $Action }
-        catch {
-            if ($try -eq 4) { throw }
-            Write-Host "  $What retry $try after: $($_.Exception.Message)"
-            Start-Sleep -Seconds ([math]::Pow(2, $try))
-        }
-    }
-}
-
 function Get-Children($nodeId) {
     $r = Invoke-WithRetry -What "CIRCABC children" -Action {
         Invoke-WebRequest -Uri "$BaseUrl/$nodeId/children" -UserAgent $UA -UseBasicParsing -Headers $Headers -TimeoutSec 30

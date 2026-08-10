@@ -27,6 +27,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -56,8 +57,13 @@ foreach ($lang in $Languages) {
         }
         $url = "http://publications.europa.eu/resource/celex/$($wk.Celex)"
         try {
-            $resp = Invoke-WebRequest -Uri $url -UserAgent $UA -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 60 `
-                -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = $langIso3 }
+            # A 404/406 here is the answer — this work has no text in this language — and
+            # counts as a miss, so it must not be retried: at thousands of works, three
+            # backoffs per legitimate miss would add hours. Everything else is transient.
+            $resp = Invoke-WithRetry -What $wk.Celex -NoRetryStatus 404, 406 -Action {
+                Invoke-WebRequest -Uri $url -UserAgent $UA -UseBasicParsing -MaximumRedirection 8 -TimeoutSec 60 `
+                    -Headers @{ Accept = "application/xhtml+xml"; "Accept-Language" = $langIso3 }
+            }
             $html = $resp.Content
             if ([string]::IsNullOrWhiteSpace($html) -or $html.Length -lt 200) { $miss++; continue }
             $file = Join-Path $textDir "$($wk.Celex).html"

@@ -45,13 +45,13 @@ $jsonFile = Join-Path $OutputFolder "hts-us.json"
 $csvFile  = Join-Path $OutputFolder "hts-us.csv"
 
 Write-Host "Downloading JSON (all chapters 01-99)..."
-Invoke-WebRequest -Uri "$BaseUrl/exportList?from=0101&to=9999.99.99.99&format=JSON&styles=false" `
-    -UserAgent $UA -UseBasicParsing -MaximumRedirection 5 -OutFile $jsonFile -TimeoutSec 180
+Invoke-Download -Uri "$BaseUrl/exportList?from=0101&to=9999.99.99.99&format=JSON&styles=false" `
+    -OutFile $jsonFile -UserAgent $UA -TimeoutSec 180 -What "HTS JSON"
 Write-Host "  → $([math]::Round((Get-Item $jsonFile).Length / 1MB, 1)) MB"
 
 Write-Host "Downloading CSV (all chapters 01-99)..."
-Invoke-WebRequest -Uri "$BaseUrl/exportList?from=0101&to=9999.99.99.99&format=CSV&styles=false" `
-    -UserAgent $UA -UseBasicParsing -MaximumRedirection 5 -OutFile $csvFile -TimeoutSec 180
+Invoke-Download -Uri "$BaseUrl/exportList?from=0101&to=9999.99.99.99&format=CSV&styles=false" `
+    -OutFile $csvFile -UserAgent $UA -TimeoutSec 180 -What "HTS CSV"
 Write-Host "  → $([math]::Round((Get-Item $csvFile).Length / 1MB, 1)) MB"
 
 # Write version marker (used as change-detection sentinel on next run)

@@ -24,7 +24,14 @@ $py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else 
 
 function Resolve-TgtcUrl([int]$y) {
     $page = "https://ggm.ticaret.gov.tr/haberler/$y-yili-istatistik-pozisyonlarina-bolunmus-turk-gumruk-tarife-cetveli-yayimlanmistir"
-    try { $html = (Invoke-WebRequest -Uri $page -UserAgent $UA -UseBasicParsing -TimeoutSec 60).Content }
+    # Retried inside the try, so a blip is distinguished from the page genuinely not existing:
+    # returning $null means "the Ministry has not published this year's TGTC yet", which the
+    # caller treats as normal, and a transport failure must not be allowed to say that.
+    try {
+        $html = (Invoke-WithRetry -What "TGTC $y page" -NoRetryStatus 404 -Action {
+            Invoke-WebRequest -Uri $page -UserAgent $UA -UseBasicParsing -TimeoutSec 60
+        }).Content
+    }
     catch { return $null }
     $m = [regex]::Match($html, 'href="(?<u>[^"]*TGTC\.zip)"', 'IgnoreCase')
     if (-not $m.Success) { return $null }

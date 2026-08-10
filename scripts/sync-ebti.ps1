@@ -11,6 +11,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -25,18 +26,6 @@ $BaseUrl = "https://ec.europa.eu/taxation_customs/dds2/ebti"
 #
 # Four attempts with exponential backoff, matching sync-eu.ps1 and sync-eurlex-meta.ps1. Still
 # throws on the last: a publisher that is genuinely down must fail loudly.
-function Invoke-WithRetry {
-    param([scriptblock]$Action, [string]$What)
-    for ($try = 1; $try -le 4; $try++) {
-        try { return & $Action }
-        catch {
-            if ($try -eq 4) { throw }
-            Write-Host "  $What retry $try after: $($_.Exception.Message)"
-            Start-Sleep -Seconds ([math]::Pow(2, $try))
-        }
-    }
-}
-
 # ─── Resolve current export date ─────────────────────────────────────────────
 
 $today = Get-Date -Format 'yyyyMMdd'

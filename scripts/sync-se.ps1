@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -58,13 +59,17 @@ function ConvertFrom-PgpToGzip {
 # have closed the gap sitting published and unread. TaricHive's SeImporter now replays the
 # incrementals on top of the newest full, exactly as NlImporter does.
 Write-Host "Listing full-snapshot files from $TotUrl/"
-$listing   = Invoke-WebRequest -Uri "$TotUrl/" -UseBasicParsing -AllowInsecureRedirect -MaximumRedirection 10
+$listing   = Invoke-WithRetry -What "tot/ listing" -Action {
+    Invoke-WebRequest -Uri "$TotUrl/" -UseBasicParsing -AllowInsecureRedirect -MaximumRedirection 10 -TimeoutSec 60
+}
 $fileNames = @($listing.Links | Select-Object -ExpandProperty href | Where-Object { $_ -like '*.xml.gz.pgp' })
 Write-Host "Found $($fileNames.Count) full-snapshot file(s)"
 
 Write-Host "Listing daily incrementals from $DifUrl/"
 try {
-    $difListing = Invoke-WebRequest -Uri "$DifUrl/" -UseBasicParsing -AllowInsecureRedirect -MaximumRedirection 10
+    $difListing = Invoke-WithRetry -What "dif/ listing" -Action {
+        Invoke-WebRequest -Uri "$DifUrl/" -UseBasicParsing -AllowInsecureRedirect -MaximumRedirection 10 -TimeoutSec 60
+    }
     $difNames   = @($difListing.Links | Select-Object -ExpandProperty href | Where-Object { $_ -like '*.xml.gz.pgp' })
     Write-Host "Found $($difNames.Count) incremental file(s)"
 }
@@ -98,7 +103,9 @@ foreach ($set in @(
         $url = "$($set.BaseUrl)/$fileName"
         Write-Host "Downloading $($set.Name): $fileName..."
         try {
-            $r = Invoke-WebRequest -Uri $url -UseBasicParsing -AllowInsecureRedirect -MaximumRedirection 5
+            $r = Invoke-WithRetry -What $fileName -Action {
+                Invoke-WebRequest -Uri $url -UseBasicParsing -AllowInsecureRedirect -MaximumRedirection 5 -TimeoutSec 300
+            }
             $pgpText = [System.Text.Encoding]::ASCII.GetString($r.Content)
             $gzBytes = ConvertFrom-PgpToGzip -PgpAsciiArmor $pgpText
             [System.IO.File]::WriteAllBytes($outPath, $gzBytes)
