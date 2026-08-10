@@ -49,8 +49,24 @@ jobs:
 
           # -f: the chapter scratch dirs are removed on success, but a mid-run failure can
           # leave one behind and gh release upload would choke on a directory.
+          #
+          # Retried, because the upload is not reliable and the failure is not clean. On
+          # 2026-08-10 15:26 the third of ten uploads returned "release not found" — seconds
+          # after `gh release view` had printed that same release and two files had gone up
+          # against it. With `bash -e` the loop then aborted, and the release was left holding
+          # CAC and CTX from that run and eight files from the day before: a mirror split across
+          # two days under one tag, which is worse than not having published at all.
           for f in downloads/fr/*; do
             [ -f "$f" ] || continue
             echo "Uploading: $(basename "$f")"
-            gh release upload "$TAG" "$f" --clobber
+            for try in 1 2 3 4; do
+              gh release upload "$TAG" "$f" --clobber && break
+              if [ "$try" = 4 ]; then
+                echo "::error::Upload of $(basename "$f") failed four times; the release is now" \
+                     "part-updated and must not be left that way."
+                exit 1
+              fi
+              echo "  retry $try in $((try * 5))s"
+              sleep $((try * 5))
+            done
           done

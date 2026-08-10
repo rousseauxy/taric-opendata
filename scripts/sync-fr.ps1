@@ -16,6 +16,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
+
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -37,8 +39,9 @@ $globalExports = [ordered]@{
     exportModif    = "RITA_Donnees_references_MOD.xml"   # Recent nomenclature modifications log
 }
 
-$downloaded = @()
-$skipped    = @()
+$downloaded     = @()
+$skipped        = @()
+$failedExports  = @()
 
 foreach ($kv in $globalExports.GetEnumerator()) {
     $outPath = Join-Path $OutputFolder $kv.Value
@@ -50,13 +53,15 @@ foreach ($kv in $globalExports.GetEnumerator()) {
     Write-Host "Downloading $($kv.Key) → $($kv.Value)..."
     try {
         $body = "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&$($kv.Key)=T%C3%A9l%C3%A9charger"
-        $r = Invoke-WebRequest -Uri $PageUrl -Method POST -Body $body -ContentType "application/x-www-form-urlencoded" `
-            -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        $r = Invoke-WithRetry -What $kv.Key -Action {
+            Invoke-WebRequest -Uri $PageUrl -Method POST -Body $body -ContentType "application/x-www-form-urlencoded" `
+                -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        }
         if ($r.Content -match 'Aucune donn|Fichier non|erreur interne') { Write-Warning "$($kv.Key): no data returned"; continue }
         Set-Content -Path $outPath -Value $r.Content -Encoding UTF8 -NoNewline
         $downloaded += $kv.Value
         Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
-    } catch { Write-Warning "Failed $($kv.Key): $_" }
+    } catch { Write-Warning "Failed $($kv.Key): $_"; $failedExports += $kv.Key }
 }
 
 # ─── 2. Nomenclature (exportNomenc) and Nomenclature+Duties (exportNomencDroit) ─
@@ -64,7 +69,13 @@ foreach ($kv in $globalExports.GetEnumerator()) {
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 Write-Host "`nFetching chapter list from RITA..."
-$page     = Invoke-WebRequest -Uri $PageUrl -UserAgent $UA -UseBasicParsing -MaximumRedirection 10
+# The one call with no try/catch, and with $ErrorActionPreference = Stop that makes it fatal.
+# That is the right behaviour — without the chapter list there are no zips to build — but until
+# it retried, a single RITA blip ended the run here and threw away the reference files already
+# downloaded. It killed the 2026-08-09 15:09 and 2026-08-10 03:37 runs exactly that way.
+$page     = Invoke-WithRetry -What "chapter list" -Action {
+    Invoke-WebRequest -Uri $PageUrl -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+}
 $chapters = [regex]::Matches($page.Content, '<option[^>]*value="(\d{2})"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique | Sort-Object
 Write-Host "Found $($chapters.Count) chapters"
 
@@ -77,22 +88,27 @@ New-Item -ItemType Directory -Force -Path $nomTmp      | Out-Null
 New-Item -ItemType Directory -Force -Path $nomDroitTmp | Out-Null
 
 $nomCount = 0; $droitCount = 0
+$failedChapters = @()
 foreach ($chp in $chapters) {
     Write-Host "  Chapter $chp..." -NoNewline
     try {
         # exportNomenc — CN structure + descriptions (chapitreCritere, no 'D')
-        $r1 = Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
-            -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritere.code=$chp&exportNomenc=T%C3%A9l%C3%A9charger" `
-            -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        $r1 = Invoke-WithRetry -What "chapter $chp nomenc" -Action {
+            Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
+                -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritere.code=$chp&exportNomenc=T%C3%A9l%C3%A9charger" `
+                -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        }
         if ($r1.Content -notmatch 'Aucune donn|Fichier non|erreur interne') {
             Set-Content -Path (Join-Path $nomTmp "RITA_Nomenc_CHP$chp.xml") -Value $r1.Content -Encoding UTF8 -NoNewline
             $nomCount++
         }
 
         # exportNomencDroit — CN structure + French duty rates (chapitreCritereD, with 'D')
-        $r2 = Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
-            -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritereD.code=$chp&exportNomencDroit=T%C3%A9l%C3%A9charger" `
-            -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        $r2 = Invoke-WithRetry -What "chapter $chp droit" -Action {
+            Invoke-WebRequest -Uri $PageUrl -Method POST -ContentType "application/x-www-form-urlencoded" `
+                -Body "expertsTelechargementsConversation.typeService=&expertsTelechargementsConversation.formatExport=$Format&expertsTelechargementsConversation.chapitreCritereD.code=$chp&exportNomencDroit=T%C3%A9l%C3%A9charger" `
+                -UserAgent $UA -UseBasicParsing -MaximumRedirection 10 -TimeoutSec 60
+        }
         if ($r2.Content -notmatch 'Aucune donn|Fichier non|erreur interne') {
             Set-Content -Path (Join-Path $nomDroitTmp "RITA_NomencDroit_CHP$chp.xml") -Value $r2.Content -Encoding UTF8 -NoNewline
             $droitCount++
@@ -101,7 +117,17 @@ foreach ($chp in $chapters) {
         $k1 = if ($nomCount   -gt 0) { [math]::Round((Get-Item (Join-Path $nomTmp      "RITA_Nomenc_CHP$chp.xml")).Length / 1KB) } else { '-' }
         $k2 = if ($droitCount -gt 0) { [math]::Round((Get-Item (Join-Path $nomDroitTmp "RITA_NomencDroit_CHP$chp.xml")).Length / 1KB) } else { '-' }
         Write-Host " nomenc=$k1 KB, droit=$k2 KB"
-    } catch { Write-Host " FAILED: $_" }
+    } catch { Write-Host " FAILED: $_"; $failedChapters += $chp }
+}
+
+# A chapter that threw after four attempts is not the same as one RITA legitimately reports as
+# empty — chapter 77 is unused in the CN and returns "Aucune données" every run, which is data.
+# The difference matters because the zips are rebuilt from whatever survived and uploaded with
+# --clobber: one chapter surviving out of 98 would still zip, and would replace a complete
+# archive with a near-empty one under the same filename. Fail instead.
+if ($failedChapters.Count -gt 0) {
+    throw ("RITA failed on $($failedChapters.Count) of $($chapters.Count) chapters after retries " +
+           "($($failedChapters -join ', ')). Refusing to publish zips built from a partial set.")
 }
 
 if ($nomCount -gt 0) {
@@ -123,3 +149,12 @@ Remove-Item $nomDroitTmp -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ""
 Write-Host "Downloaded: $($downloaded.Count) file(s)"
 if ($skipped.Count -gt 0) { Write-Host "Skipped (already exist): $($skipped.Count)" }
+
+# Named rather than left as a warning scrolled past mid-log. exportModif has failed on every run
+# for long enough that RITA_Donnees_references_MOD.xml has never once reached the release, and
+# nothing said so: the summary reported "Downloaded: 10 file(s)" out of nine references plus two
+# zips and looked complete. A reference export is not fatal — nothing imports MOD, and losing the
+# other ten files over it would be the worse trade — but it has to be visible.
+if ($failedExports.Count -gt 0) {
+    Write-Host "NOT downloaded after retries: $($failedExports -join ', ')"
+}
