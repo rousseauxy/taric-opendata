@@ -17,7 +17,7 @@ on:
 
 jobs:
   retry-coverage:
-    runs-on: ubuntu-latest
+    runs-on: oci
     steps:
       - uses: actions/checkout@v4
 
