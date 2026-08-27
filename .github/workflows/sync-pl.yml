@@ -22,7 +22,7 @@ on:
 
 jobs:
   sync:
-    runs-on: oci
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     timeout-minutes: 30
