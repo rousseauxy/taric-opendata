@@ -1,13 +1,17 @@
 name: Sync EUR-Lex legislation (metadata)
 
+# TEST BED COPY. The scheduled triggers are commented out on purpose:
+# github.com/rousseauxy/taric-opendata remains authoritative and still runs
+# these on schedule. Running them here too would scrape every source twice
+# and publish the same data from two forges. Trigger manually instead.
 on:
-  schedule:
-    - cron: '55 22 * * *'
-    # Second daily pass, 12h offset. One window a day means a single failure loses the
-    # day: an upstream outage, a maintenance window on either side, or a publish that
-    # slips past our slot (NL lands ~5 minutes before it). An unchanged source is a no-op
-    # thanks to change detection, so the retry costs almost nothing.
-    - cron: '55 10 * * *'
+  # schedule:
+    # - cron: '55 22 * * *'
+    # # Second daily pass, 12h offset. One window a day means a single failure loses the
+    # # day: an upstream outage, a maintenance window on either side, or a publish that
+    # # slips past our slot (NL lands ~5 minutes before it). An unchanged source is a no-op
+    # # thanks to change detection, so the retry costs almost nothing.
+    # - cron: '55 10 * * *'
   workflow_dispatch:
     inputs:
       force:

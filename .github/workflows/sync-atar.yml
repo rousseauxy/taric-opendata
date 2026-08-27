@@ -3,9 +3,13 @@ name: Sync UK Advance Tariff Rulings (ATaR)
 # Heavy HTML scrape of the GOV.UK ATaR service (~6.6k ruling pages). Weekly, off the
 # daily 22:00 slot other sources use. Change detection (total ruling count) makes most
 # runs a fast no-op; a full re-scrape only happens when the count changes.
+# TEST BED COPY. The scheduled triggers are commented out on purpose:
+# github.com/rousseauxy/taric-opendata remains authoritative and still runs
+# these on schedule. Running them here too would scrape every source twice
+# and publish the same data from two forges. Trigger manually instead.
 on:
-  schedule:
-    - cron: '30 3 * * 1'   # Mondays 03:30 UTC
+  # schedule:
+    # - cron: '30 3 * * 1'   # Mondays 03:30 UTC
   workflow_dispatch:
     inputs:
       force:

@@ -1,8 +1,12 @@
 name: Sync Turkey (TGTC)
 
+# TEST BED COPY. The scheduled triggers are commented out on purpose:
+# github.com/rousseauxy/taric-opendata remains authoritative and still runs
+# these on schedule. Running them here too would scrape every source twice
+# and publish the same data from two forges. Trigger manually instead.
 on:
-  schedule:
-    - cron: '40 3 * * 2'   # weekly, Tuesdays 03:40 UTC (annual data + sentinel → mostly a no-op)
+  # schedule:
+    # - cron: '40 3 * * 2'   # weekly, Tuesdays 03:40 UTC (annual data + sentinel → mostly a no-op)
   workflow_dispatch:
     inputs:
       force:
