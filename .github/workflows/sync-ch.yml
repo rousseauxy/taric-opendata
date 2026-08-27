@@ -43,13 +43,13 @@ jobs:
         run: |
           TAG="ch-$(date -u +%Y-%m)"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "Switzerland BAZG ${TAG}" \
               --notes "Auto-synced from [BAZG datahub](https://datahub.bazg.admin.ch/public-resources/). Contains Swiss tariff master data including duty rates (TariffMasterData), commodity tree, country codes, and Passar/TAXUD code lists as ZIP-compressed XML. Files are replaced in-place as BAZG publishes daily updates."
 
           for f in downloads/ch/*.zip; do
             name=$(basename "$f")
             echo "Uploading: $name"
-            gh release upload "$TAG" "$f" --clobber
+            scripts/release.sh upload "$TAG" "$f" --clobber
           done

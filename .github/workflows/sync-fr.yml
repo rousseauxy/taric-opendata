@@ -46,17 +46,17 @@ jobs:
         run: |
           TAG="fr-$(date -u +%Y-%m)"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "France RITA ${TAG}" \
               --notes "Auto-synced from [RITA (Référentiel Intégré Tarifaire Automatisé)](https://www.douane.gouv.fr/rita-encyclopedie/public/experts/telechargements/init.action). Contains EU TARIC + French national measures (TVA, droits d'accise, autres taxes nationales)."
 
           # -f: the chapter scratch dirs are removed on success, but a mid-run failure can
-          # leave one behind and gh release upload would choke on a directory.
+          # leave one behind and the upload would choke on a directory.
           #
           # Retried, because the upload is not reliable and the failure is not clean. On
           # 2026-08-10 15:26 the third of ten uploads returned "release not found" — seconds
-          # after `gh release view` had printed that same release and two files had gone up
+          # after the release had already been printed as present and two files had gone up
           # against it. With `bash -e` the loop then aborted, and the release was left holding
           # CAC and CTX from that run and eight files from the day before: a mirror split across
           # two days under one tag, which is worse than not having published at all.
@@ -64,7 +64,7 @@ jobs:
             [ -f "$f" ] || continue
             echo "Uploading: $(basename "$f")"
             for try in 1 2 3 4; do
-              gh release upload "$TAG" "$f" --clobber && break
+              scripts/release.sh upload "$TAG" "$f" --clobber && break
               if [ "$try" = 4 ]; then
                 echo "::error::Upload of $(basename "$f") failed four times; the release is now" \
                      "part-updated and must not be left that way."

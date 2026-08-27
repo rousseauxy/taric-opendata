@@ -35,7 +35,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="se-$(date -u +%Y-%m)"
-          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          assets=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
@@ -55,18 +55,18 @@ jobs:
         run: |
           TAG="se-$(date -u +%Y-%m)"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "Sweden Tulltaxan ${TAG}" \
               --notes "Auto-synced from [Tullverket Tariff File Distribution](https://distr.tullverket.se/tulltaxan). Full snapshot (xml/tot/, refreshed monthly) plus the daily incrementals (xml/dif/) that keep it current — AdditionalCode, Certificate, CodeList, DeclarableGoodsNomenclature, DutyExpression, Footnote, GeographicalArea, GoodsNomenclature, Measure, and more. Files are delivered as gzipped XML (.xml.gz)."
 
-          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
+          EXISTING=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/se/*; do
             name=$(basename "$f")
             if echo "$EXISTING" | grep -qF "\"$name\""; then
               echo "Already uploaded: $name"
             else
               echo "Uploading: $name"
-              gh release upload "$TAG" "$f"
+              scripts/release.sh upload "$TAG" "$f"
             fi
           done

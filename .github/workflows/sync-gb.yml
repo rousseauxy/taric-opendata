@@ -42,22 +42,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="gb-$(date -u +%Y-%m)"
-          # gh api writes its 404 body to STDOUT, so `2>/dev/null || echo ""` does not stop the
-          # error JSON landing in $rel — it is already inside the command substitution. That is
+          # Reading the id straight out of `gh api` put its 404 body into $rel: the error JSON
+          # was already inside the command substitution, so `2>/dev/null || echo ""` never saw
           # what broke every run from 1 August: the month's release does not exist yet, so
           # release_id became {"message":"Not Found",...}, the prune step's `!= ''` guard passed
           # on it, and `REL="{"message":...}"` was invalid shell (exit 127). Prune then failed
           # before Publish, and Publish is the only step that creates the release — so the next
           # run 404'd identically. Self-perpetuating until someone looked.
           #
-          # Treat anything that is not a plain integer as "no release".
-          rel=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id' 2>/dev/null || true)
+          # release.sh prints nothing when the release is absent, but keep the guard: treat
+          # anything that is not a plain integer as "no release".
+          rel=$(scripts/release.sh id "$TAG")
           case "$rel" in (''|*[!0-9]*) rel="" ;; esac
           assets=""
           if [ -n "$rel" ]; then
-            # Dedicated assets endpoint + --paginate: the release can hold more than one page.
-            assets=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$rel/assets" \
-              --jq '.[].name' | paste -sd, -)
+            assets=$(scripts/release.sh asset-list "$TAG" | cut -f2 | paste -sd, -)
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "release_id=$rel" >> "$GITHUB_OUTPUT"
@@ -80,9 +79,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          REL="${{ steps.existing.outputs.release_id }}"
-          assets=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$REL/assets" \
-            --jq '.[] | [.id, .name] | @tsv')
+          TAG="${{ steps.existing.outputs.tag }}"
+          assets=$(scripts/release.sh asset-list "$TAG")
 
           # Newest (KEEP_VERSIONS - 1) versions survive; the version about to be uploaded
           # takes the last slot. sort -V orders v4.0.999 before v4.0.1000.
@@ -96,7 +94,7 @@ jobs:
             v=$(printf '%s' "$name" | sed -n 's/.*-\(v[0-9][0-9.]*\)\.csv$/\1/p')
             if [ -n "$v" ] && ! printf '%s\n' "$keep" | grep -qxF -- "$v"; then
               echo "Pruning: $name"
-              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" --silent
+              scripts/release.sh asset-delete "$TAG" "$id"
             fi
           done
 
@@ -107,18 +105,18 @@ jobs:
         run: |
           TAG="gb-$(date -u +%Y-%m)"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "UK Global Tariff ${TAG}" \
               --notes "Auto-synced from the [DBT Data API](https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01). Contains all 50 UK Global Tariff tables (commodities, measures, quotas, regulations, certificates, geo areas, footnotes, and more) as CSV. Version is embedded in each filename."
 
-          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
+          EXISTING=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/gb/*; do
             name=$(basename "$f")
             if echo "$EXISTING" | grep -qF "\"$name\""; then
               echo "Already uploaded: $name"
             else
               echo "Uploading: $name"
-              gh release upload "$TAG" "$f"
+              scripts/release.sh upload "$TAG" "$f"
             fi
           done

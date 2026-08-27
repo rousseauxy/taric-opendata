@@ -32,7 +32,7 @@ jobs:
         run: |
           mkdir -p downloads/eurlex
           MONTH=$(date -u +%Y-%m)
-          gh release download "eurlex-$MONTH" --pattern "eurlex-manifest.csv" --dir downloads/eurlex
+          scripts/release.sh download "eurlex-$MONTH" --pattern "eurlex-manifest.csv" --dir downloads/eurlex
 
       - name: Download full text and zip
         shell: pwsh
@@ -47,9 +47,9 @@ jobs:
         run: |
           MONTH=$(date -u +%Y-%m)
           TAG="eurlex-$MONTH"
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" --title "EU customs legislation $MONTH" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" --title "EU customs legislation $MONTH" \
               --notes "EU customs legislation from CELLAR."
           for f in downloads/eurlex/eurlex-text-*.zip; do
-            [ -e "$f" ] && gh release upload "$TAG" "$f" --clobber
+            [ -e "$f" ] && scripts/release.sh upload "$TAG" "$f" --clobber
           done

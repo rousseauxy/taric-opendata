@@ -37,7 +37,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="be-$(date -u +%Y-%m)"
-          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          assets=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
@@ -57,18 +57,18 @@ jobs:
         run: |
           TAG="be-$(date -u +%Y-%m)"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "Belgium Tarbel ${TAG}" \
               --notes "Scraped directly from the Belgian minfin [TARBEL portal](https://eservices.minfin.fgov.be/extTariffBrowser/XmlExtractions). Contains EU TARIC + Belgian national measures (BTW, RBT, accijnzen): one full extraction on the 1st of the month + daily deltas, plus XML schema docs and currency rates."
 
-          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
+          EXISTING=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/be/*; do
             name=$(basename "$f")
             if echo "$EXISTING" | grep -qF "\"$name\""; then
               echo "Already uploaded: $name"
             else
               echo "Uploading: $name"
-              gh release upload "$TAG" "$f"
+              scripts/release.sh upload "$TAG" "$f"
             fi
           done

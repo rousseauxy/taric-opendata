@@ -36,7 +36,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="eu-$(date -u +%Y-%m)"
-          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          assets=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
@@ -53,7 +53,7 @@ jobs:
           TAG="${{ steps.existing.outputs.tag }}"
           NAME="eu-taric-$(date -u +%Y-%m).zip"
           mkdir -p downloads/eu
-          if gh release download "$TAG" -p "$NAME" -D downloads/eu 2>/dev/null; then
+          if scripts/release.sh download "$TAG" -p "$NAME" -D downloads/eu 2>/dev/null; then
             echo "path=downloads/eu/$NAME" >> "$GITHUB_OUTPUT"
             echo "Fetched $NAME for comparison"
           else
@@ -83,14 +83,14 @@ jobs:
           YEAR=$(date -u +%Y)
           MONTH=$(date -u +%m)
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "EU TARIC ${YEAR}-${MONTH}" \
               --notes "Auto-synced from [CIRCABC (DG TAXUD)](https://circabc.europa.eu/ui/group/0e5f18c2-4b2f-42e9-aed4-dfe50ae1263b/library/64db9d0f-e7c9-4084-afe9-f47e70e53c10) and the [EC DDS2 daily portal](https://ec.europa.eu/taxation_customs/dds2/taric/daily_publications.jsp?Lang=en).
 
           Monthly XLSX extractions (nomenclature, duties, measures, geographical areas, exchange rates, legal basis) plus daily delta ZIPs."
 
-          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
+          EXISTING=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name]')
           for f in downloads/eu/*.zip; do
             name=$(basename "$f")
             # The monthly zip is the one asset that legitimately changes in place: CIRCABC keeps
@@ -101,11 +101,11 @@ jobs:
             case "$name" in eu-taric-*.zip) MONTHLY=1 ;; *) MONTHLY=0 ;; esac
             if [ "$MONTHLY" = "1" ]; then
               echo "Uploading (clobber): $name"
-              gh release upload "$TAG" "$f" --clobber
+              scripts/release.sh upload "$TAG" "$f" --clobber
             elif echo "$EXISTING" | grep -qF "\"$name\""; then
               echo "Already uploaded: $name"
             else
               echo "Uploading: $name"
-              gh release upload "$TAG" "$f"
+              scripts/release.sh upload "$TAG" "$f"
             fi
           done

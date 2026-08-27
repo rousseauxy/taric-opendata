@@ -36,7 +36,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="pl-$(date -u +%Y)"
-          assets=$(gh release view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
+          assets=$(scripts/release.sh view "$TAG" --json assets --jq '[.assets[].name] | join(",")' 2>/dev/null || echo "")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
           echo "Existing assets: $assets"
@@ -50,7 +50,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p downloads/pl
-          gh release download "${{ steps.existing.outputs.tag }}" \
+          scripts/release.sh download "${{ steps.existing.outputs.tag }}" \
             -p 'isztar4-base.zip.sha256' -D downloads/pl 2>/dev/null \
             && echo "Previous hash: $(cat downloads/pl/isztar4-base.zip.sha256)" \
             || echo "No previous hash — this run will publish."
@@ -70,12 +70,12 @@ jobs:
         run: |
           TAG="pl-$(date -u +%Y)"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "Poland ISZTAR4 ${TAG}" \
               --notes "Auto-synced from [ISZTAR4 XmlExtractions](https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions). Full startup file containing all EU TARIC + Polish national tariff objects (~7.7 GB XML, ~220 MB compressed ZIP). Source: Ministry of Finance (Ministerstwo Finansów) + European Commission DG TAXUD."
 
           # The sidecar goes up with it, so the next run has something to compare against.
-          gh release upload "$TAG" \
+          scripts/release.sh upload "$TAG" \
             downloads/pl/isztar4-base.zip \
             downloads/pl/isztar4-base.zip.sha256 --clobber

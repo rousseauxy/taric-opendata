@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir -p downloads/ebti
           YEAR=$(date -u +%Y)
-          gh release download "ebti-$YEAR" --pattern "ebti-version.txt" --dir downloads/ebti 2>/dev/null || true
+          scripts/release.sh download "ebti-$YEAR" --pattern "ebti-version.txt" --dir downloads/ebti 2>/dev/null || true
 
       - name: Download EBTI full extract
         shell: pwsh
@@ -53,10 +53,10 @@ jobs:
           YEAR=$(date -u +%Y)
           TAG="ebti-$YEAR"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "EU Binding Tariff Information (EBTI) $YEAR" \
               --notes "Auto-synced from [DDS2 EBTI](https://ec.europa.eu/taxation_customs/dds2/ebti/). Full extract of all EU Binding Tariff Information decisions across all member states. Contains TARIC/CN commodity codes, product descriptions, and the official classification decisions issued by national customs authorities. Updated daily when the export date changes."
 
-          gh release upload "$TAG" downloads/ebti/DDS2-EBTI_Full.zip --clobber
-          gh release upload "$TAG" downloads/ebti/ebti-version.txt --clobber
+          scripts/release.sh upload "$TAG" downloads/ebti/DDS2-EBTI_Full.zip --clobber
+          scripts/release.sh upload "$TAG" downloads/ebti/ebti-version.txt --clobber

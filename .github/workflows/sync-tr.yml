@@ -41,8 +41,8 @@ jobs:
           YEAR=$(date -u +%Y)
           # Both markers. Fetching only the TGTC one meant the regime sentinel was never present
           # on the runner, so the regime zip was re-downloaded and re-parsed on every run.
-          gh release download "tr-$YEAR" --pattern "tr-version.txt" --dir downloads/tr 2>/dev/null || true
-          gh release download "tr-$YEAR" --pattern "tr-regime-version.txt" --dir downloads/tr 2>/dev/null || true
+          scripts/release.sh download "tr-$YEAR" --pattern "tr-version.txt" --dir downloads/tr 2>/dev/null || true
+          scripts/release.sh download "tr-$YEAR" --pattern "tr-regime-version.txt" --dir downloads/tr 2>/dev/null || true
 
       - name: Download + parse TGTC
         shell: pwsh
@@ -68,27 +68,27 @@ jobs:
           YEAR=$(date -u +%Y)
           TAG="tr-$YEAR"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "Turkish Customs Tariff (TGTC) $YEAR" \
               --notes "Auto-synced from the Turkish Ministry of Trade ([ggm.ticaret.gov.tr](https://ggm.ticaret.gov.tr)). Nomenclature of the İstatistik Pozisyonlarına Bölünmüş Türk Gümrük Tarife Cetveli: 12-digit GTİP codes, Turkish descriptions, units of measure and the base (474) duty rate (tr-nomenclature.csv), the binding Section/Chapter legal notes (tr-notes.csv), the applied duties per GTİP × country group from the Import Regime Decree annex lists (tr-measures.csv), and the GSP product-group sections those lists' country exclusions refer to (tr-gsp-sectors.csv). GTİP digits 1-8 = HS6 + EU CN, so consumers can borrow EU CN descriptions for the aligned levels."
 
           # Each guarded: on an unchanged-TGTC run the nomenclature outputs are absent by design,
           # and an unguarded upload would fail the step and take the regime outputs down with it.
-          [ -f downloads/tr/tr-nomenclature.csv ] && gh release upload "$TAG" downloads/tr/tr-nomenclature.csv --clobber || true
-          [ -f downloads/tr/tr-version.txt ] && gh release upload "$TAG" downloads/tr/tr-version.txt --clobber || true
-          [ -f downloads/tr/tr-notes.csv ] && gh release upload "$TAG" downloads/tr/tr-notes.csv --clobber || true
-          [ -f downloads/tr/tr-measures.csv ] && gh release upload "$TAG" downloads/tr/tr-measures.csv --clobber || true
-          [ -f downloads/tr/tr-gsp-sectors.csv ] && gh release upload "$TAG" downloads/tr/tr-gsp-sectors.csv --clobber || true
+          [ -f downloads/tr/tr-nomenclature.csv ] && scripts/release.sh upload "$TAG" downloads/tr/tr-nomenclature.csv --clobber || true
+          [ -f downloads/tr/tr-version.txt ] && scripts/release.sh upload "$TAG" downloads/tr/tr-version.txt --clobber || true
+          [ -f downloads/tr/tr-notes.csv ] && scripts/release.sh upload "$TAG" downloads/tr/tr-notes.csv --clobber || true
+          [ -f downloads/tr/tr-measures.csv ] && scripts/release.sh upload "$TAG" downloads/tr/tr-measures.csv --clobber || true
+          [ -f downloads/tr/tr-gsp-sectors.csv ] && scripts/release.sh upload "$TAG" downloads/tr/tr-gsp-sectors.csv --clobber || true
           # Listed explicitly like the rest: a file this workflow produces but does not name here
           # is written on the runner and thrown away, which is exactly how rejim.zip stayed off
           # the release for weeks while every run reported success.
-          [ -f downloads/tr/tr-agri-components.csv ] && gh release upload "$TAG" downloads/tr/tr-agri-components.csv --clobber || true
-          [ -f downloads/tr/tr-regime-version.txt ] && gh release upload "$TAG" downloads/tr/tr-regime-version.txt --clobber || true
+          [ -f downloads/tr/tr-agri-components.csv ] && scripts/release.sh upload "$TAG" downloads/tr/tr-agri-components.csv --clobber || true
+          [ -f downloads/tr/tr-regime-version.txt ] && scripts/release.sh upload "$TAG" downloads/tr/tr-regime-version.txt --clobber || true
 
           # The publisher's own archives, mirrored rather than only derived from. TaricHive's
           # TrImporter reads rejim.zip directly; tgtc.zip is here so the .xls parse (which stays
           # in Python — legacy BIFF needs xlrd) stays reproducible and the source bytes are
           # recoverable when a parser bug turns up. Each is only present when it changed.
-          [ -f downloads/tr/rejim.zip ] && gh release upload "$TAG" downloads/tr/rejim.zip --clobber || true
-          [ -f downloads/tr/tgtc.zip ] && gh release upload "$TAG" downloads/tr/tgtc.zip --clobber || true
+          [ -f downloads/tr/rejim.zip ] && scripts/release.sh upload "$TAG" downloads/tr/rejim.zip --clobber || true
+          [ -f downloads/tr/tgtc.zip ] && scripts/release.sh upload "$TAG" downloads/tr/tgtc.zip --clobber || true

@@ -34,7 +34,7 @@ jobs:
         run: |
           mkdir -p downloads/atar
           MONTH=$(date -u +%Y-%m)
-          gh release download "atar-$MONTH" --pattern "atar-version.txt" --dir downloads/atar 2>/dev/null || true
+          scripts/release.sh download "atar-$MONTH" --pattern "atar-version.txt" --dir downloads/atar 2>/dev/null || true
 
       - name: Scrape UK ATaR
         shell: pwsh
@@ -51,10 +51,10 @@ jobs:
           MONTH=$(date -u +%Y-%m)
           TAG="atar-$MONTH"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "UK Advance Tariff Rulings (ATaR) $MONTH" \
               --notes "Auto-scraped from the GOV.UK [Search for Advance Tariff Rulings](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) service (Open Government Licence). The GB analogue of EU BTIs: ruling reference, commodity code, validity dates, goods description, keywords, and grounds for classification."
 
-          gh release upload "$TAG" downloads/atar/atar.csv --clobber
-          gh release upload "$TAG" downloads/atar/atar-version.txt --clobber
+          scripts/release.sh upload "$TAG" downloads/atar/atar.csv --clobber
+          scripts/release.sh upload "$TAG" downloads/atar/atar-version.txt --clobber

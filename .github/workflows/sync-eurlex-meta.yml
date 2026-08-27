@@ -36,9 +36,9 @@ jobs:
         run: |
           mkdir -p downloads/eurlex
           MONTH=$(date -u +%Y-%m)
-          gh release download "eurlex-$MONTH" --pattern "eurlex-version.txt"  --dir downloads/eurlex 2>/dev/null || true
-          gh release download "eurlex-$MONTH" --pattern "cnen-version.txt"    --dir downloads/eurlex 2>/dev/null || true
-          gh release download "eurlex-$MONTH" --pattern "cn-notes-version.txt" --dir downloads/eurlex 2>/dev/null || true
+          scripts/release.sh download "eurlex-$MONTH" --pattern "eurlex-version.txt"  --dir downloads/eurlex 2>/dev/null || true
+          scripts/release.sh download "eurlex-$MONTH" --pattern "cnen-version.txt"    --dir downloads/eurlex 2>/dev/null || true
+          scripts/release.sh download "eurlex-$MONTH" --pattern "cn-notes-version.txt" --dir downloads/eurlex 2>/dev/null || true
 
       - name: Build manifest from CELLAR SPARQL
         shell: pwsh
@@ -58,14 +58,14 @@ jobs:
           MONTH=$(date -u +%Y-%m)
           TAG="eurlex-$MONTH"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
+          scripts/release.sh view "$TAG" 2>/dev/null || \
+            scripts/release.sh create "$TAG" \
               --title "EU secondary legislation $MONTH" \
               --notes "Auto-synced from the EU Publications Office [CELLAR](http://publications.europa.eu/webapi/rdf/sparql) SPARQL endpoint. Metadata manifest of ALL EU secondary legislation (CELEX sector 3 — regulations, directives, decisions; ~233k acts): CELEX, title, Official Journal id, document/validity dates, in-force flag, resource type, ELI, and legal-act directory codes. This covers every regulation a TARIC measure can reference (a GeneratingRegulationId always maps to a sector-3 CELEX). Full text is published separately (manually) via the *full* workflow. Also includes cnen-en.html — the consolidated CN Explanatory Notes (CNEN). Updated daily when the work set or CNEN changes."
 
-          if [ -f downloads/eurlex/eurlex-manifest.csv ]; then gh release upload "$TAG" downloads/eurlex/eurlex-manifest.csv --clobber; fi
-          if [ -f downloads/eurlex/eurlex-version.txt ];  then gh release upload "$TAG" downloads/eurlex/eurlex-version.txt  --clobber; fi
-          if [ -f downloads/eurlex/cnen-en.html ];        then gh release upload "$TAG" downloads/eurlex/cnen-en.html        --clobber; fi
-          if [ -f downloads/eurlex/cnen-version.txt ];    then gh release upload "$TAG" downloads/eurlex/cnen-version.txt    --clobber; fi
-          if [ -f downloads/eurlex/cn-notes.csv ];        then gh release upload "$TAG" downloads/eurlex/cn-notes.csv        --clobber; fi
-          if [ -f downloads/eurlex/cn-notes-version.txt ]; then gh release upload "$TAG" downloads/eurlex/cn-notes-version.txt --clobber; fi
+          if [ -f downloads/eurlex/eurlex-manifest.csv ]; then scripts/release.sh upload "$TAG" downloads/eurlex/eurlex-manifest.csv --clobber; fi
+          if [ -f downloads/eurlex/eurlex-version.txt ];  then scripts/release.sh upload "$TAG" downloads/eurlex/eurlex-version.txt  --clobber; fi
+          if [ -f downloads/eurlex/cnen-en.html ];        then scripts/release.sh upload "$TAG" downloads/eurlex/cnen-en.html        --clobber; fi
+          if [ -f downloads/eurlex/cnen-version.txt ];    then scripts/release.sh upload "$TAG" downloads/eurlex/cnen-version.txt    --clobber; fi
+          if [ -f downloads/eurlex/cn-notes.csv ];        then scripts/release.sh upload "$TAG" downloads/eurlex/cn-notes.csv        --clobber; fi
+          if [ -f downloads/eurlex/cn-notes-version.txt ]; then scripts/release.sh upload "$TAG" downloads/eurlex/cn-notes-version.txt --clobber; fi
