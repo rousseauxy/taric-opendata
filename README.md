@@ -19,8 +19,11 @@ files; the releases stay here.
 
 The Forgejo-only experiments that predate this — running the syncs on the OCI runner, and
 `scripts/release.sh`, which publishes to whichever forge the job happens to be running on — are
-kept on the **`forgejo-experiment-2026-08`** branch of this repository. They were on Forgejo alone
+kept on the **`forgejo-experiment-2026-08`** tag of this repository. They were on Forgejo alone
 until the mirror replaced it, which would have been the only copy.
+
+A tag rather than a branch on purpose: a branch has GitHub offering a pull request for work that
+will never be merged, every time anyone opens the repository.
 
 ## Countries
 
