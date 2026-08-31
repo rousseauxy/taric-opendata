@@ -1,0 +1,69 @@
+name: Sync EU Customs Reference Data (CS/RD2)
+
+# DG TAXUD's CS/RD2 — the customs office list and every reference code list, which is what
+# national customs applications validate declarations against. Regenerated daily; the contents
+# move only when a list actually changes, so most runs download 33 MB, hash it and stop.
+#
+# The version marker is read from the CURRENT month's release only. That is deliberate: it makes
+# the first run of each month publish regardless, so every monthly tag holds a complete pair of
+# assets and a consumer pinning one is never handed an empty release.
+on:
+  schedule:
+    - cron: '40 22 * * *'
+    # Second daily pass, 12h offset — an outage or a maintenance window on either side otherwise
+    # loses the day. An unchanged source is a cheap no-op.
+    - cron: '40 10 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if the content hash is unchanged'
+        type: boolean
+        default: false
+      snapshot_date:
+        description: 'Snapshot date (yyyyMMdd). Blank = today. A past date pulls the lists as they stood then.'
+        type: string
+        default: ''
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stored version marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/csrd2
+          MONTH=$(date -u +%Y-%m)
+          gh release download "csrd2-$MONTH" --pattern "csrd2-version.txt" --dir downloads/csrd2 2>/dev/null || true
+
+      - name: Download CS/RD2 extracts
+        shell: pwsh
+        run: |
+          $params = @{ OutputFolder = 'downloads/csrd2' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          if ('${{ inputs.snapshot_date }}') { $params['SnapshotDate'] = '${{ inputs.snapshot_date }}' }
+          scripts/sync-csrd2.ps1 @params
+
+      - name: Publish to release
+        if: hashFiles('downloads/csrd2/COL-Generic.zip') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MONTH=$(date -u +%Y-%m)
+          TAG="csrd2-$MONTH"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "EU Customs Reference Data (CS/RD2) $MONTH" \
+              --notes "Auto-synced from [DG TAXUD CS/RD2](https://ec.europa.eu/taxation_customs/dds2/rd/) — the reference data EU customs applications validate declarations against. \`COL-Generic.zip\`: the Customs Office List, every office in the EU and the common-transit countries, with the roles (export, exit, departure, destination, transit, supervising) that say what each may act as. \`RD-Generic.zip\`: every reference code list, as nine per-domain archives (CCI, AES, NCTS-P4/P5/P6, ECS-P2, ICS-P1, ICS2, COMMON) — the same list can differ between domains, SupportingDocumentType holding 333 codes for export against 294 for import. \`csrd2-version.txt\`: the snapshot date the extract was taken at, and the SHA-256 of each asset. Both extracts are a valid-at-snapshot-date view, so expired codes are absent rather than marked: a consumer replacing its own copy wholesale would drop codes that historical declarations still reference."
+
+          gh release upload "$TAG" downloads/csrd2/COL-Generic.zip    --clobber
+          gh release upload "$TAG" downloads/csrd2/RD-Generic.zip     --clobber
+          gh release upload "$TAG" downloads/csrd2/csrd2-version.txt  --clobber

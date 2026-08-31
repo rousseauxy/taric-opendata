@@ -27,6 +27,7 @@ both are excluded from the daily window.
 | `ebti` | EU (BTI) | [DDS2 EBTI](https://ec.europa.eu/taxation_customs/dds2/ebti/) | ZIP/CSV | `ebti-YYYY` | [![ebti](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-ebti.yml) |
 | `eurlex` | EU (legislation) | [CELLAR SPARQL](http://publications.europa.eu/webapi/rdf/sparql) | CSV (+ZIP) | `eurlex-YYYY-MM` | [![eurlex](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml) |
 | `atar` | UK (rulings) | [GOV.UK ATaR](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) | CSV | `atar-YYYY-MM` | [![atar](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml) |
+| `csrd2` | EU (reference data) | [DDS2 CS/RD2](https://ec.europa.eu/taxation_customs/dds2/rd/) | ZIP/XML | `csrd2-YYYY-MM` | [![csrd2](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-csrd2.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-csrd2.yml) |
 | `tr` | Türkiye | [Ticaret Bakanlığı (TGTC)](https://ggm.ticaret.gov.tr/) | XLS→CSV | `tr-YYYY` | [![tr](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml) |
 
 ## Data Contents
@@ -115,6 +116,36 @@ without any per-code lookup against CELLAR. Split into a daily **metadata** sync
   Per-CELEX HTML full text, one language per zip. Use the `limit`/a filtered manifest — running
   full text over all ~233k acts is impractical (tens of GB). Older acts with no HTML
   manifestation (PDF/scan only) are skipped.
+
+### EU customs reference data (`csrd2`)
+DG TAXUD's **CS/RD2** — the customs office list and every reference code list, which is what
+national customs applications validate declarations against. Two extracts from the same portal,
+regenerated daily; the contents move only when a list actually changes, so change detection is a
+SHA-256 of what came back rather than a version probe (see below).
+- `COL-Generic.zip` — the **Customs Office List**: every office in the EU and the common-transit
+  countries (4,283 on 2026-08-31), with country, UN/LOCODE, address, opening timetable, and the
+  **roles** (`EXP` export, `EXT` exit, `DEP` departure, `DES` destination, `TRA` transit, `SCO`
+  supervising) that say what each office may act as.
+- `RD-Generic.zip` — **every reference code list**, as nine per-domain archives: CCI (import),
+  AES (export), NCTS-P4/P5/P6 (transit), ECS-P2, ICS-P1, ICS2, and COMMON. Each is one XML of
+  `RDEntity`/`RDEntry` with per-language descriptions. COMMON also carries `NationalCodes` — the
+  member states' own supplements, keyed by country code.
+- `csrd2-version.txt` — change-detection sentinel (snapshot date + SHA-256 of each asset).
+
+**The date in the URL is a snapshot date, not a filename.** The service generates the extract on
+demand at whatever date is asked for and answers `200` for a date that has not happened yet, so
+there is nothing to `HEAD` and no listing to scrape — "has it moved" can only be answered after
+downloading. That is cheap here (33 MB), and the same property is useful in reverse: a past date
+returns the lists as they stood then. Pass `-SnapshotDate yyyyMMdd` to do so.
+
+**The same list can differ between domains**, and not by rounding: `SupportingDocumentType` holds
+333 codes under AES and 294 under CCI. A consumer merging blindly gets whichever domain it read
+first; done properly, an export declaration is offered the AES list and an import the CCI one.
+
+**Both extracts are a valid-at-snapshot-date view** — `ExtractValidReferenceData` — so codes that
+have expired are simply absent rather than marked. A consumer that replaces its own copy wholesale
+drops codes that historical declarations still reference; it needs to mark unseen entries inactive
+and keep them.
 
 ### UK Advance Tariff Rulings (`atar`)
 The GB analogue of EU BTIs, scraped from the GOV.UK **Search for Advance Tariff Rulings**
