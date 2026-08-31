@@ -4,6 +4,20 @@ Automated mirrors of customs tariff data from multiple jurisdictions, published 
 
 [![Sync All Countries](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-all.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-all.yml)
 
+## Where this lives
+
+**GitHub is the source.** The sync workflows run there, and the release assets every consumer
+reads — CustomsHive's Tarbel, BTI, EUR-Lex, ATaR and CS/RD2 importers, and TaricHive — are
+GitHub releases. There is one repository and one set of releases on purpose: a second publisher
+means two answers to "what is the current extract", and for a while there were two, with the
+Forgejo copy carrying workflow changes GitHub did not have.
+
+`forge.xact.cloud` is a **files-only mirror**. It holds the repository so the code is not on a
+single host; it does not publish releases and its Actions should stay off, or the syncs run twice
+and produce a second set of assets nobody reads. The Forgejo-only experiments that predate this
+(running the syncs on the OCI runner, publishing to whichever forge the job ran on) are kept on
+the `forgejo-experiment-2026-08` branch there rather than deleted.
+
 ## Countries
 
 The **Status** badge shows each source's last daily run. Each source runs on its own schedule
