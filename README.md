@@ -12,11 +12,15 @@ GitHub releases. There is one repository and one set of releases on purpose: a s
 means two answers to "what is the current extract", and for a while there were two, with the
 Forgejo copy carrying workflow changes GitHub did not have.
 
-`forge.xact.cloud` is a **files-only mirror**. It holds the repository so the code is not on a
-single host; it does not publish releases and its Actions should stay off, or the syncs run twice
-and produce a second set of assets nobody reads. The Forgejo-only experiments that predate this
-(running the syncs on the OCI runner, publishing to whichever forge the job ran on) are kept on
-the `forgejo-experiment-2026-08` branch there rather than deleted.
+`forge.xact.cloud` is a **pull mirror**, configured on the Forgejo side to fetch this repository
+on a schedule. That direction matters: a pull mirror is read-only and does not run Actions, so the
+syncs cannot run twice or produce a second set of release assets that nobody reads. It mirrors the
+files; the releases stay here.
+
+The Forgejo-only experiments that predate this — running the syncs on the OCI runner, and
+`scripts/release.sh`, which publishes to whichever forge the job happens to be running on — are
+kept on the **`forgejo-experiment-2026-08`** branch of this repository. They were on Forgejo alone
+until the mirror replaced it, which would have been the only copy.
 
 ## Countries
 
