@@ -42,6 +42,42 @@ if ($urls.Count -eq 0) {
 
 Write-Host "Found $($urls.Count) file(s) in manifest for $Month"
 
+# A month's release must carry a full snapshot. DTV republishes the ~240 MB full weekly and the
+# daily incrementals only replay on top of one, so in the first days of a month - before the
+# first weekly full lands - the month's files are incrementals alone. Published as they were, the
+# consumer sees a release with no full in it: TaricHive prunes its download directory to the
+# current release's assets, opened the largest zip it had left (a 30 KB incremental) as the full,
+# and served the Netherlands with zero measures for three days (2026-09-02..05). Carrying the
+# newest earlier full forward makes every release self-contained. The manifest does not mark
+# fulls and the names have the same shape, so a full is recognised by size (Content-Length).
+$fullThreshold = 50MB
+function Get-RemoteLength([string]$u) {
+    $head = curl -sI @curlHeaders $u
+    if ($LASTEXITCODE -ne 0) { return 0 }
+    $m = [regex]::Match(($head -join "`n"), '(?im)^content-length:\s*(\d+)')
+    if ($m.Success) { return [long]$m.Groups[1].Value } else { return 0 }
+}
+$hasFull = $false
+foreach ($u in $urls) {
+    if ((Get-RemoteLength $u) -ge $fullThreshold) { $hasFull = $true; break }
+}
+if (-not $hasFull) {
+    $earlier = $xml.SelectNodes("//download/url") |
+        ForEach-Object { $_.InnerText.Trim() } |
+        Where-Object { $_ -notmatch [regex]::Escape($monthPrefix) } |
+        Sort-Object -Descending
+    foreach ($u in $earlier) {
+        if ((Get-RemoteLength $u) -ge $fullThreshold) {
+            Write-Host "No full snapshot in $Month yet - carrying forward $(($u -split '[?#]')[0] | Split-Path -Leaf)"
+            $urls = @($u) + @($urls)
+            break
+        }
+    }
+    if (-not $hasFull -and $urls.Count -gt 0 -and (Get-RemoteLength $urls[0]) -lt $fullThreshold) {
+        Write-Warning "No full snapshot found in the manifest at all; the release will hold incrementals only."
+    }
+}
+
 $downloaded = @()
 foreach ($url in $urls) {
     $filename = ($url -split '[?#]')[0] | Split-Path -Leaf
