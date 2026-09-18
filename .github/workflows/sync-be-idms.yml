@@ -1,0 +1,74 @@
+name: Sync Belgian IDMS documentation
+
+# The rules and code lists Belgium's import system (IDMS) validates a declaration against, from the
+# minfin technical-documentation page. The files are replaced without announcement under dated
+# names, so the page is read for the newest of each; most runs find the same three files, hash
+# them and stop.
+#
+# The version marker is read from the CURRENT month's release only, as sync-csrd2 does: the first
+# run of each month publishes regardless, so every monthly tag holds a complete set of assets.
+on:
+  schedule:
+    - cron: '20 23 * * *'
+    - cron: '20 11 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if the content hash is unchanged'
+        type: boolean
+        default: false
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stored version marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloads/be-idms
+          MONTH=$(date -u +%Y-%m)
+          gh release download "be-idms-$MONTH" --pattern "be-idms-version.txt" --dir downloads/be-idms 2>/dev/null || true
+
+      - name: Download IDMS documentation
+        shell: pwsh
+        run: |
+          $params = @{ OutputFolder = 'downloads/be-idms' }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-be-idms.ps1 @params
+
+      - name: Set up Python
+        if: hashFiles('downloads/be-idms/IDMS_VRE.xlsx') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Convert rules and code lists to JSON
+        if: hashFiles('downloads/be-idms/IDMS_VRE.xlsx') != ''
+        run: |
+          python -m pip install --quiet openpyxl
+          python scripts/parse-be-idms.py downloads/be-idms
+
+      - name: Publish to release
+        if: hashFiles('downloads/be-idms/IDMS_VRE.xlsx') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MONTH=$(date -u +%Y-%m)
+          TAG="be-idms-$MONTH"
+
+          gh release view "$TAG" 2>/dev/null || \
+            gh release create "$TAG" \
+              --title "Belgian IDMS documentation $MONTH" \
+              --notes "Auto-synced from the [minfin IDMS technical documentation](https://financien.belgium.be/nl/douane_accijnzen/ondernemingen/applicaties-da/technische-documentatie-0/idms/all) — what Belgium's import system validates a declaration against. \`IDMS_VRE.xlsx\`: the validation rules, on three sheets — active, inactive (not enforced) and temporarily blocking — plus a change log; this is the live rule set, where the Business rules PDF stopped being updated in May 2024. \`idms-rules.json\`: the same rules with a \`status\` on each, so an inactive rule cannot be mistaken for a live one. \`IDMS_codelist.xlsx\` / \`idms-codelists.json\`: IDMS's own filtered code lists (CL093 holds 28 codes here against 15 in the EU CCI list; CL214 carries the national 1VDP and 1ZVB). \`IDMS_XSD.zip\`: the message schemas. \`be-idms-version.txt\`: the source file each asset came from, its edition date and SHA-256."
+
+          for f in IDMS_VRE.xlsx IDMS_codelist.xlsx IDMS_XSD.zip idms-rules.json idms-codelists.json be-idms-version.txt; do
+            gh release upload "$TAG" "downloads/be-idms/$f" --clobber
+          done

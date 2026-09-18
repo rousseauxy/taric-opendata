@@ -33,6 +33,8 @@ jobs:
     uses: ./.github/workflows/sync-ebti.yml
   csrd2:
     uses: ./.github/workflows/sync-csrd2.yml
+  be-idms:
+    uses: ./.github/workflows/sync-be-idms.yml
   us:
     uses: ./.github/workflows/sync-us.yml
   eurlex-meta:

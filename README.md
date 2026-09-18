@@ -49,6 +49,7 @@ both are excluded from the daily window.
 | `eurlex` | EU (legislation) | [CELLAR SPARQL](http://publications.europa.eu/webapi/rdf/sparql) | CSV (+ZIP) | `eurlex-YYYY-MM` | [![eurlex](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-eurlex-meta.yml) |
 | `atar` | UK (rulings) | [GOV.UK ATaR](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) | CSV | `atar-YYYY-MM` | [![atar](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml) |
 | `csrd2` | EU (reference data) | [DDS2 CS/RD2](https://ec.europa.eu/taxation_customs/dds2/rd/) | ZIP/XML | `csrd2-YYYY-MM` | [![csrd2](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-csrd2.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-csrd2.yml) |
+| `be-idms` | Belgium (import rules) | [minfin IDMS documentation](https://financien.belgium.be/nl/douane_accijnzen/ondernemingen/applicaties-da/technische-documentatie-0/idms/all) | XLSX/ZIP + JSON | `be-idms-YYYY-MM` | [![be-idms](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-idms.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-idms.yml) |
 | `tr` | Türkiye | [Ticaret Bakanlığı (TGTC)](https://ggm.ticaret.gov.tr/) | XLS→CSV | `tr-YYYY` | [![tr](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml) |
 
 ## Data Contents
@@ -158,6 +159,28 @@ demand at whatever date is asked for and answers `200` for a date that has not h
 there is nothing to `HEAD` and no listing to scrape — "has it moved" can only be answered after
 downloading. That is cheap here (33 MB), and the same property is useful in reverse: a past date
 returns the lists as they stood then. Pass `-SnapshotDate yyyyMMdd` to do so.
+
+### Belgian IDMS documentation (`be-idms`)
+What Belgium's import system (IDMS) validates a declaration against, from minfin's technical
+documentation page. Three source files, published under stable names, plus JSON of the two
+workbooks:
+- `IDMS_VRE.xlsx` — the **validation rules**: active, inactive and temporarily blocking, each on
+  its own sheet, with a change log. **This is the live rule set**; the *Business rules* PDF on the
+  same page stopped being updated in May 2024, and rules it states as requirements have since been
+  switched off (BE0211, BE0212 — both inactive on 2026-09-08).
+- `idms-rules.json` — the same rules, each with a `status` (`active` / `inactive` /
+  `temporary-blocking`), so an inactive rule cannot be read as a live one.
+- `IDMS_codelist.xlsx` / `idms-codelists.json` — IDMS's **own filtered code lists**, one per list
+  with its data elements and per-language descriptions. They differ from the EU lists in `csrd2`:
+  CL093 holds 28 codes here against 15 in the CCI domain, and CL214 carries the Belgian national
+  `1VDP` and `1ZVB`.
+- `IDMS_XSD.zip` — the message schemas (IE413B, IE415B, IE428B, IE429B).
+- `be-idms-version.txt` — per asset: SHA-256, edition date and the source file name.
+
+**The file names carry the edition date, in more than one format** — mostly `yymmdd`, but the page
+also links `ddmmyyyy` and `yyyymmdd` names — and every old edition stays linked in an archive
+section. The sync reads the page, dates each link from its own name and takes the newest of each
+kind; change detection is on content, not on the name.
 
 **The same list can differ between domains**, and not by rounding: `SupportingDocumentType` holds
 333 codes under AES and 294 under CCI. A consumer merging blindly gets whichever domain it read
