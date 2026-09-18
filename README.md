@@ -50,6 +50,8 @@ both are excluded from the daily window.
 | `atar` | UK (rulings) | [GOV.UK ATaR](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) | CSV | `atar-YYYY-MM` | [![atar](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-atar.yml) |
 | `csrd2` | EU (reference data) | [DDS2 CS/RD2](https://ec.europa.eu/taxation_customs/dds2/rd/) | ZIP/XML | `csrd2-YYYY-MM` | [![csrd2](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-csrd2.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-csrd2.yml) |
 | `be-idms` | Belgium (import rules) | [minfin IDMS documentation](https://financien.belgium.be/nl/douane_accijnzen/ondernemingen/applicaties-da/technische-documentatie-0/idms/all) | XLSX/ZIP + JSON | `be-idms-YYYY-MM` | [![be-idms](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-idms.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-idms.yml) |
+| `be-aes` | Belgium (export rules) | [minfin AES documentation](https://financien.belgium.be/nl/douane_accijnzen/ondernemingen/applicaties-da/aes/aes-export) | XLSX/ZIP + JSON | `be-aes-YYYY-MM` | [![be-aes](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-aes.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-aes.yml) |
+| `be-ncts` | Belgium (transit rules) | [minfin NCTS documentation](https://financien.belgium.be/nl/douane_accijnzen/ondernemingen/applicaties-da/technische-documentatie-0/ncts) | XLSX/DOCX/ZIP + JSON | `be-ncts-YYYY-MM` | [![be-ncts](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-ncts.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-be-ncts.yml) |
 | `tr` | Türkiye | [Ticaret Bakanlığı (TGTC)](https://ggm.ticaret.gov.tr/) | XLS→CSV | `tr-YYYY` | [![tr](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml/badge.svg)](https://github.com/rousseauxy/taric-opendata/actions/workflows/sync-tr.yml) |
 
 ## Data Contents
@@ -177,10 +179,50 @@ workbooks:
 - `IDMS_XSD.zip` — the message schemas (IE413B, IE415B, IE428B, IE429B).
 - `be-idms-version.txt` — per asset: SHA-256, edition date and the source file name.
 
-**The file names carry the edition date, in more than one format** — mostly `yymmdd`, but the page
-also links `ddmmyyyy` and `yyyymmdd` names — and every old edition stays linked in an archive
-section. The sync reads the page, dates each link from its own name and takes the newest of each
-kind; change detection is on content, not on the name.
+### Belgian AES documentation (`be-aes`)
+What Belgium's export system (AES) validates a declaration against, from minfin's AES page:
+- `AES_rules.xlsx` / `aes-rules.json` — the **validation rules**: active, inactive, "other active
+  rules" (error codes with a description, no expression), the "missing documents filter", and
+  release notes. Each rule in the JSON carries the `sheet` it came from and a `status` where the
+  sheet states one.
+- `AES_national_rules.xlsx` / `aes-national-rules.json` — a second workbook minfin publishes as
+  "validation nat rules", in the same layout, dated independently of the main one; on 2026-09-18
+  (editions 2025-12-03 and 2026-01-09) the two shared all but five rule codes each way.
+- `AES_XSD.zip` — the Belgian national adaptation of the AES XSDs, newest dated edition.
+- `AES_national_codelists.zip` — the national code lists (CLBE213, CLBE239, CLBE380) as JSON.
+
+### Belgian NCTS documentation (`be-ncts`)
+What Belgium's transit system validates a declaration against. **Belgium runs NCTS Phase 6
+("opt-out") since 2026-04-01**, per the P6 main document; a transit declaration can no longer carry
+an ENS, which goes to ICS2.
+- `NCTS_P5_rules.xlsx` / `ncts-p5-rules.json` — *Rules and Conditions*: the Belgian rules (`BE…`)
+  and the EU rules and conditions. No sheet says which are active, so the JSON carries the sheet
+  and **no status** rather than a guessed one.
+- `NCTS_CLBE*.xlsx` / `ncts-national-codelists.json` — the national code lists (CLBE009 discharge,
+  CLBE010, CLBE213, CLBE380).
+- `NCTS_P6_business_rules.docx`, `NCTS_P6_code_lists.docx`, `NCTS_P6_main_document.docx` — the P6
+  message implementation guide, as published (Word; not converted).
+- `NCTS_P6_XSD.zip`, `NCTS_P5_to_P6_delta.xlsx` — the P6 schemas, and what changed from P5.
+
+**Three pages, one release.** The newest *Rules and Conditions* is not always on the P5 page: on
+2026-09-18 the P5 page offered the 04 03 26 edition while the general NCTS page offered 30 03 26.
+The sync reads the general, P5 and P6 pages and takes the newest across them. The rest of the
+general page (Phase 4 appendices and manuals, EDIFACT notes, 2018 office planning, certificates) is
+historical and not mirrored.
+
+### How the three Belgian syncs work (`be-idms`, `be-aes`, `be-ncts`)
+One script, `scripts/sync-be-docs.ps1 -System IDMS|AES|NCTS`, holds everything that differs per
+system; one parser, `scripts/parse-be-docs.py`, turns the workbooks into JSON; the three workflows
+share `sync-be-docs.yml`. Each release is monthly (`be-<system>-YYYY-MM`) and updated only when a
+file's content changes; `be-<system>-version.txt` records, per asset, its SHA-256, its edition and
+the source file name.
+
+**The file names carry the edition, in no fixed format**, and old editions stay linked: `yymmdd`,
+`ddmmyyyy`, `yyyymmdd`, `yyyy-MM-dd`, `dd MM yy`, `dd MM yyyy`, a version (`MIGv041`), or nothing
+at all. Each link is keyed by the edition its own name states and the newest of each kind wins; an
+undated kind must match exactly one link, or the run stops rather than guess. **A page can answer
+`200` with nothing in it** (the AES page did, once): a page with no document links counts as a
+failed attempt and is retried.
 
 **The same list can differ between domains**, and not by rounding: `SupportingDocumentType` holds
 333 codes under AES and 294 under CCI. A consumer merging blindly gets whichever domain it read

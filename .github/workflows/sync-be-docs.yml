@@ -1,0 +1,76 @@
+name: Sync Belgian customs documentation (shared)
+
+# The body of sync-be-idms, sync-be-aes and sync-be-ncts: read minfin's documentation pages for one
+# system, download the newest edition of each file, convert the rule and code-list workbooks to
+# JSON, and publish — only when a file's content changed. Everything that differs per system (pages,
+# file patterns, asset names, release notes) lives in scripts/sync-be-docs.ps1.
+#
+# The version marker is read from the CURRENT month's release only, as sync-csrd2 does: the first
+# run of each month publishes regardless, so every monthly tag holds a complete set of assets.
+on:
+  workflow_call:
+    inputs:
+      system:
+        description: 'idms, aes or ncts (lower case: it is also the release tag)'
+        type: string
+        required: true
+      force:
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    env:
+      SYS: ${{ inputs.system }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stored version marker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "downloads/be-$SYS"
+          MONTH=$(date -u +%Y-%m)
+          gh release download "be-$SYS-$MONTH" --pattern "be-$SYS-version.txt" --dir "downloads/be-$SYS" 2>/dev/null || true
+
+      - name: Download documentation
+        shell: pwsh
+        run: |
+          $params = @{ System = $env:SYS; OutputFolder = "downloads/be-$env:SYS" }
+          if ('${{ inputs.force }}' -eq 'true') { $params['Force'] = $true }
+          scripts/sync-be-docs.ps1 @params
+
+      # The notes file is written only when there is something to publish.
+      - name: Set up Python
+        if: hashFiles(format('downloads/be-{0}-notes.md', inputs.system)) != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Convert rules and code lists to JSON
+        if: hashFiles(format('downloads/be-{0}-notes.md', inputs.system)) != ''
+        run: |
+          python -m pip install --quiet openpyxl
+          python scripts/parse-be-docs.py "$SYS" "downloads/be-$SYS"
+
+      - name: Publish to release
+        if: hashFiles(format('downloads/be-{0}-notes.md', inputs.system)) != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MONTH=$(date -u +%Y-%m)
+          TAG="be-$SYS-$MONTH"
+          TITLE="$(cat "downloads/be-$SYS-title.txt") $MONTH"
+
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "$TITLE" --notes-file "downloads/be-$SYS-notes.md"
+
+          for f in downloads/be-$SYS/*; do
+            case "$f" in *.tmp) continue ;; esac
+            gh release upload "$TAG" "$f" --clobber
+          done

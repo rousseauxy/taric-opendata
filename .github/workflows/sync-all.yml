@@ -35,6 +35,10 @@ jobs:
     uses: ./.github/workflows/sync-csrd2.yml
   be-idms:
     uses: ./.github/workflows/sync-be-idms.yml
+  be-aes:
+    uses: ./.github/workflows/sync-be-aes.yml
+  be-ncts:
+    uses: ./.github/workflows/sync-be-ncts.yml
   us:
     uses: ./.github/workflows/sync-us.yml
   eurlex-meta:

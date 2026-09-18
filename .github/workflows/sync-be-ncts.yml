@@ -1,0 +1,25 @@
+name: Sync Belgian NCTS documentation
+
+# Belgium's transit system: the P5 rules and conditions (newest across the general, P5 and P6
+# pages), the national code lists, and the P6 implementation guide and XSDs — Belgium runs P6 since
+# 2026-04-01. The work is in sync-be-docs.yml; this file is the schedule and the badge.
+on:
+  schedule:
+    - cron: '30 23 * * *'
+    - cron: '30 11 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if the content hash is unchanged'
+        type: boolean
+        default: false
+  workflow_call:
+
+jobs:
+  sync:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/sync-be-docs.yml
+    with:
+      system: ncts
+      force: ${{ inputs.force == true }}
