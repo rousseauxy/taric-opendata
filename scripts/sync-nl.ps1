@@ -1,5 +1,6 @@
 # Downloads Netherlands DTV (Douane Tarief Voorziening) tariff data.
-# Source manifest: https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml
+# Source manifest: https://kennisbank.douane.nl/wp-content/uploads/tariff/download_bestanden.xml
+# (linked from https://www.douane.nl/kennisbank/douane-tarief-voorziening-dtv/ - look there if it moves again)
 param(
     [string]$OutputFolder = "downloads/nl",
     [string]$Month        = (Get-Date -Format "yyyy-MM"),
@@ -11,7 +12,9 @@ $ErrorActionPreference = "Stop"
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
-$ManifestUrl = "https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml"
+# Moved off download.belastingdienst.nl/douane_sw/tariff/ in September 2026: the old manifest
+# stopped updating on 2026-09-18 while still answering 200, then went 404 on 2026-09-28.
+$ManifestUrl = "https://kennisbank.douane.nl/wp-content/uploads/tariff/download_bestanden.xml"
 
 $curlHeaders = @(
     "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -36,6 +39,15 @@ $urls = $xml.SelectNodes("//download/url") |
     Where-Object { $_ -match [regex]::Escape($monthPrefix) }
 
 if ($urls.Count -eq 0) {
+    # DTV publishes at 22:00 CEST on working days, so the first days of a month legitimately have
+    # no file yet (three days when the month starts on a weekend). That is not a failure, and the
+    # manifest must not be left behind: the workflow would publish a release holding nothing else.
+    $now = (Get-Date).ToUniversalTime()
+    if ($Month -eq $now.ToString("yyyy-MM") -and $now.Day -le 3) {
+        Write-Host "No files in manifest for $Month yet (day $($now.Day) of the month) - nothing to publish."
+        Remove-Item (Join-Path $OutputFolder "manifest.xml")
+        exit 0
+    }
     Write-Warning "No files found in manifest for month '$Month'. Inspect $OutputFolder/manifest.xml to check availability."
     exit 1
 }

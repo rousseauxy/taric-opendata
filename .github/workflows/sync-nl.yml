@@ -54,7 +54,7 @@ jobs:
           gh release view "$TAG" 2>/dev/null || \
             gh release create "$TAG" \
               --title "Netherlands DTV ${TAG}" \
-              --notes "Auto-synced from the Dutch Belastingdienst [DTV bulk download](https://download.belastingdienst.nl/douane_sw/tariff/download_bestanden.xml). Contains EU TARIC + Dutch national measures (BTW, accijns)."
+              --notes "Auto-synced from the Dutch Douane [DTV bulk download](https://kennisbank.douane.nl/wp-content/uploads/tariff/download_bestanden.xml). Contains EU TARIC + Dutch national measures (BTW, accijns)."
 
           # Always re-upload manifest so it stays current; skip other files if already present
           if [ -f downloads/nl/manifest.xml ]; then
