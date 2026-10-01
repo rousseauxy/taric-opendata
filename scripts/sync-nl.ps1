@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot 'lib/Http.psm1') -Force
 $OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
 New-Item -ItemType Directory -Force -Path $OutputFolder | Out-Null
 
@@ -91,6 +92,7 @@ if (-not $hasFull) {
 }
 
 $downloaded = @()
+$failed     = @()
 foreach ($url in $urls) {
     $filename = ($url -split '[?#]')[0] | Split-Path -Leaf
     $outPath  = Join-Path $OutputFolder $filename
@@ -101,14 +103,30 @@ foreach ($url in $urls) {
     }
 
     Write-Host "Downloading: $filename"
-    curl -fsSL @curlHeaders -o $outPath $url
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Failed: $filename (curl exit $LASTEXITCODE)"
-        if (Test-Path $outPath) { Remove-Item $outPath }
-    } else {
+    try {
+        Invoke-WithRetry -What $filename -Action {
+            # Removed before each attempt: the loop above skips a file that exists, so a
+            # truncated copy left behind would pass for a download on the next run.
+            if (Test-Path $outPath) { Remove-Item $outPath }
+            curl -fsSL @curlHeaders -o $outPath $url
+            if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
+        }
         $downloaded += $filename
         Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
+    } catch {
+        Write-Warning "Failed: $filename ($($_.Exception.Message))"
+        if (Test-Path $outPath) { Remove-Item $outPath }
+        $failed += $filename
     }
 }
 
 Write-Host "Downloaded $($downloaded.Count) new file(s)"
+
+# A failed download fails the run, which keeps the workflow from publishing. On 2026-10-01 the
+# carried-forward full dropped mid-transfer (curl exit 56), this was a warning, and the month's
+# release went out holding one incremental and no full - the shape that emptied the Netherlands
+# in TaricHive a month earlier. The next run skips what is already published and retries the rest.
+if ($failed.Count -gt 0) {
+    Write-Host "::error::$($failed.Count) file(s) failed to download: $($failed -join ', ')"
+    exit 1
+}
