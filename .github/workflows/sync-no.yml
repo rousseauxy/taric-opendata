@@ -50,5 +50,6 @@ jobs:
           for f in downloads/no/*; do
             [ -f "$f" ] || continue
             echo "Uploading: $(basename "$f")"
+            scripts/archive-superseded.sh "$TAG" "$f"   # keep the copy this replaces
             gh release upload "$TAG" "$f" --clobber
           done

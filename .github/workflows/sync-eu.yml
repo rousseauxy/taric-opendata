@@ -97,6 +97,7 @@ jobs:
             case "$name" in eu-taric-*.zip) MONTHLY=1 ;; *) MONTHLY=0 ;; esac
             if [ "$MONTHLY" = "1" ]; then
               echo "Uploading (clobber): $name"
+              scripts/archive-superseded.sh "$TAG" "$f"   # keep the copy this replaces
               gh release upload "$TAG" "$f" --clobber
             elif echo "$EXISTING" | grep -qF "\"$name\""; then
               echo "Already uploaded: $name"

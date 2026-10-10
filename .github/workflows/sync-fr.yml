@@ -59,6 +59,7 @@ jobs:
           for f in downloads/fr/*; do
             [ -f "$f" ] || continue
             echo "Uploading: $(basename "$f")"
+            scripts/archive-superseded.sh "$TAG" "$f"   # keep the copy this replaces
             for try in 1 2 3 4; do
               gh release upload "$TAG" "$f" --clobber && break
               if [ "$try" = 4 ]; then
