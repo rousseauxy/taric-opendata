@@ -22,6 +22,26 @@ $UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 if ($Year -le 0) { $Year = (Get-Date).Year }
 $py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
 
+<#
+.SYNOPSIS
+True when the file is a zip archive that opens and holds at least one entry.
+
+.DESCRIPTION
+Every archive this script mirrors goes through this before it reaches the publish folder. The
+Ministry answers a retired /data/ path with HTTP 200 and an HTML "Internal Server Error" page, so
+neither curl's -f nor a status check sees a failure. On 2026-10-06 that page was saved as
+rejim.zip and uploaded over the real archive: the parse failed, was logged as non-fatal, the run
+went green, and TaricHive could not import Turkey for four days.
+#>
+function Test-ZipArchive([string]$Path) {
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $z = [System.IO.Compression.ZipFile]::OpenRead($Path)
+        try { return $z.Entries.Count -gt 0 } finally { $z.Dispose() }
+    }
+    catch { return $false }
+}
+
 function Resolve-TgtcUrl([int]$y) {
     $page = "https://ggm.ticaret.gov.tr/haberler/$y-yili-istatistik-pozisyonlarina-bolunmus-turk-gumruk-tarife-cetveli-yayimlanmistir"
     # Retried inside the try, so a blip is distinguished from the page genuinely not existing:
@@ -73,8 +93,12 @@ New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 # trade.
 if ($skipTgtc -and $zipUrl) {
     try {
+        # Fetched beside the publish folder and moved in only once it opens as an archive.
         $zip = Join-Path $OutputFolder "tgtc.zip"
-        Invoke-Download -Uri ([uri]::EscapeUriString($zipUrl)) -OutFile $zip -UserAgent $UA -What "TGTC zip"
+        $fetched = Join-Path $tmp "tgtc.zip"
+        Invoke-Download -Uri ([uri]::EscapeUriString($zipUrl)) -OutFile $fetched -UserAgent $UA -What "TGTC zip"
+        if (-not (Test-ZipArchive $fetched)) { throw "the download is not a zip archive" }
+        Move-Item $fetched $zip -Force
         Write-Host "  mirrored tgtc.zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB) without re-parsing"
     }
     catch { Write-Warning "Could not mirror tgtc.zip (non-fatal): $_" }
@@ -145,8 +169,13 @@ finally {
 # IPs — fetch with curl + browser-like headers (same fix as sync-nl.ps1). The pinned
 # per-year /data/ URLs (static assets) are the fallback; update the pin when a new
 # year's decree is published.
+# The file name is not stable within a year either: the 2026 archive was republished as
+# "rejim 2026 (27-08-2026).zip" and the old name now answers with an error page. Newest first.
 $KnownRegimeUrls = @{
-    2026 = "https://ticaret.gov.tr/data/68d2951f13b876c2509a480b/rejim 2026.zip"
+    2026 = @(
+        "https://ticaret.gov.tr/data/68d2951f13b876c2509a480b/rejim 2026 (27-08-2026).zip",
+        "https://ticaret.gov.tr/data/68d2951f13b876c2509a480b/rejim 2026.zip"
+    )
 }
 
 $curlHeaders = @(
@@ -203,30 +232,34 @@ function Get-TicaretCaBundle {
 $caBundle = Get-TicaretCaBundle
 $curlTls = if ($caBundle) { @("--cacert", $caBundle) } else { @() }
 
-function Resolve-RegimeUrl {
+# Every address worth trying, best first: the one the decision page links to, then the pins.
+function Resolve-RegimeUrls {
+    $urls = [System.Collections.Generic.List[string]]::new()
     $page = "https://ticaret.gov.tr/ithalat/ithalat-mevzuati/ithalat-rejimi-karari-igv-karari-ve-ithalat-tebligleri/1-ithalat-rejimi-kararikarar-sayisi3350karar-metni-ve-tablolar-konsolide-edilmis-olup-gunceldir"
-    $html = curl -fsSL @curlHeaders @curlTls --max-time 30 $page 2>$null
+    $html = curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 @curlHeaders @curlTls --max-time 30 $page 2>$null
     if ($LASTEXITCODE -eq 0 -and $html) {
         $m = [regex]::Match(($html -join "`n"), 'href="(?<u>[^"]*rejim[^"]*\.zip)"', 'IgnoreCase')
         if ($m.Success) {
             $u = $m.Groups['u'].Value
             if ($u -notmatch '^https?://') { $u = "https://ticaret.gov.tr" + $(if ($u.StartsWith("/")) { $u } else { "/$u" }) }
-            return $u
+            $urls.Add($u)
         }
     }
-    Write-Warning "Regime page fetch failed (curl exit $LASTEXITCODE) — trying pinned URL."
+    if ($urls.Count -eq 0) { Write-Warning "Regime page fetch failed (curl exit $LASTEXITCODE) — trying the pinned URLs." }
 
     # Note the extra parentheses: PowerShell's comma binds tighter than '-'.
     foreach ($y in @((Get-Date).Year, ((Get-Date).Year - 1))) {
-        if ($KnownRegimeUrls.ContainsKey($y)) { return $KnownRegimeUrls[$y] }
+        if ($KnownRegimeUrls.ContainsKey($y)) {
+            foreach ($u in $KnownRegimeUrls[$y]) { if (-not $urls.Contains($u)) { $urls.Add($u) } }
+            break
+        }
     }
-    return $null
+    return ,$urls.ToArray()
 }
 
 try {
-    $regimeUrl = Resolve-RegimeUrl
-    if (-not $regimeUrl) { Write-Warning "Could not resolve the Import Regime zip URL — skipping tr-measures.csv."; exit 0 }
-    Write-Host "Import Regime: $regimeUrl"
+    $regimeUrls = Resolve-RegimeUrls
+    if ($regimeUrls.Count -eq 0) { Write-Warning "Could not resolve the Import Regime zip URL — skipping tr-measures.csv."; exit 0 }
 
     # The sentinel holds the SHA256 of the zip, not its URL.
     #
@@ -246,9 +279,23 @@ try {
     try {
         # Also kept — see the note on tgtc.zip above. This is the archive TaricHive's TrImporter
         # reads directly; tr-measures.csv is published beside it during the transition.
+        #
+        # Fetched into the temp folder and moved in only once it opens as an archive, so nothing
+        # that is not the Ministry's zip can reach the release under this name. With no usable
+        # download the publish folder holds no rejim.zip and the release keeps the one it has.
         $rzip = Join-Path $OutputFolder "rejim.zip"
-        curl -fsSL @curlHeaders @curlTls --max-time 300 -o $rzip ([uri]::EscapeUriString($regimeUrl))
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rzip)) { throw "curl failed downloading the regime zip (exit $LASTEXITCODE)" }
+        $fetched = Join-Path $tmp2 "rejim.zip"
+        $regimeUrl = $null
+        foreach ($candidate in $regimeUrls) {
+            if (Test-Path $fetched) { Remove-Item $fetched -Force }
+            curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 @curlHeaders @curlTls --max-time 300 -o $fetched ([uri]::EscapeUriString($candidate))
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $fetched)) { Write-Warning "  $candidate : curl exit $LASTEXITCODE"; continue }
+            if (-not (Test-ZipArchive $fetched)) { Write-Warning "  $candidate : answered with $((Get-Item $fetched).Length) bytes that are not a zip archive"; continue }
+            $regimeUrl = $candidate; break
+        }
+        if (-not $regimeUrl) { throw "no address served the regime archive ($($regimeUrls.Count) tried)" }
+        Move-Item $fetched $rzip -Force
+        Write-Host "Import Regime: $regimeUrl"
         Write-Host "  downloaded $([math]::Round((Get-Item $rzip).Length / 1MB, 1)) MB"
 
         # Parse and publish unconditionally. The hash is recorded and logged, not obeyed.
