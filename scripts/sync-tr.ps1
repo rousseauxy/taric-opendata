@@ -22,26 +22,6 @@ $UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 if ($Year -le 0) { $Year = (Get-Date).Year }
 $py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
 
-<#
-.SYNOPSIS
-True when the file is a zip archive that opens and holds at least one entry.
-
-.DESCRIPTION
-Every archive this script mirrors goes through this before it reaches the publish folder. The
-Ministry answers a retired /data/ path with HTTP 200 and an HTML "Internal Server Error" page, so
-neither curl's -f nor a status check sees a failure. On 2026-10-06 that page was saved as
-rejim.zip and uploaded over the real archive: the parse failed, was logged as non-fatal, the run
-went green, and TaricHive could not import Turkey for four days.
-#>
-function Test-ZipArchive([string]$Path) {
-    try {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $z = [System.IO.Compression.ZipFile]::OpenRead($Path)
-        try { return $z.Entries.Count -gt 0 } finally { $z.Dispose() }
-    }
-    catch { return $false }
-}
-
 function Resolve-TgtcUrl([int]$y) {
     $page = "https://ggm.ticaret.gov.tr/haberler/$y-yili-istatistik-pozisyonlarina-bolunmus-turk-gumruk-tarife-cetveli-yayimlanmistir"
     # Retried inside the try, so a blip is distinguished from the page genuinely not existing:

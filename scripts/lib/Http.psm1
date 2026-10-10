@@ -102,4 +102,24 @@ function Invoke-Download {
     } | Out-Null
 }
 
-Export-ModuleMember -Function Invoke-WithRetry, Invoke-Download
+<#
+.SYNOPSIS
+True when the file is a zip archive that opens and holds at least one entry.
+
+.DESCRIPTION
+Every archive a sync script mirrors goes through this before it reaches the publish folder. The
+Ministry answers a retired /data/ path with HTTP 200 and an HTML "Internal Server Error" page, so
+neither curl's -f nor a status check sees a failure. On 2026-10-06 that page was saved as
+rejim.zip and uploaded over the real archive: the parse failed, was logged as non-fatal, the run
+went green, and TaricHive could not import Turkey for four days.
+#>
+function Test-ZipArchive([string]$Path) {
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $z = [System.IO.Compression.ZipFile]::OpenRead($Path)
+        try { return $z.Entries.Count -gt 0 } finally { $z.Dispose() }
+    }
+    catch { return $false }
+}
+
+Export-ModuleMember -Function Invoke-WithRetry, Invoke-Download, Test-ZipArchive

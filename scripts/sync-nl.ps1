@@ -110,6 +110,12 @@ foreach ($url in $urls) {
             if (Test-Path $outPath) { Remove-Item $outPath }
             curl -fsSL @curlHeaders -o $outPath $url
             if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
+            # A publisher can answer 200 with an error page, which curl -f does not see (that is
+            # how Turkey's archive was replaced by HTML on 2026-10-06). Here it would be worse:
+            # an asset already on the release is skipped ever after, so a bad one would stay.
+            if ($filename -like '*.zip' -and -not (Test-ZipArchive $outPath)) {
+                throw "answered with $((Get-Item $outPath).Length) bytes that are not a zip archive"
+            }
         }
         $downloaded += $filename
         Write-Host "  -> $([math]::Round((Get-Item $outPath).Length / 1KB)) KB"
