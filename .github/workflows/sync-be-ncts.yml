@@ -19,6 +19,7 @@ jobs:
   sync:
     permissions:
       contents: write
+      issues: write   # the shared workflow opens an issue when it fails
     uses: ./.github/workflows/sync-be-docs.yml
     with:
       system: ncts

@@ -1,0 +1,14 @@
+# Workflows that still call `gh release upload` themselves instead of scripts/publish-assets.sh.
+# lint.yml fails any workflow that does so and is not listed here. This list only gets shorter:
+# move a workflow onto publish-assets.sh and delete its line. Do not add one.
+sync-atar.yml
+sync-be-docs.yml
+sync-ch.yml
+sync-csrd2.yml
+sync-ebti.yml
+sync-eurlex-full.yml
+sync-eurlex-meta.yml
+sync-gb.yml
+sync-pl.yml
+sync-se.yml
+sync-us.yml

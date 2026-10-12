@@ -8,11 +8,11 @@ on:
   push:
     paths:
       - 'scripts/**'
-      - '.github/workflows/lint.yml'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'scripts/**'
-      - '.github/workflows/lint.yml'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
@@ -24,3 +24,10 @@ jobs:
       - name: Every HTTP call in a sync script must be retried
         shell: pwsh
         run: scripts/Test-HttpRetryCoverage.ps1 -ScriptDirectory scripts
+
+  publish-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every release upload goes through scripts/publish-assets.sh
+        run: bash scripts/Test-PublishGate.sh

@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
     timeout-minutes: 30
 
     steps:
@@ -76,33 +77,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.existing.outputs.tag }}"
-          YEAR=$(date -u +%Y)
-          MONTH=$(date -u +%m)
-
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
-              --title "EU TARIC ${YEAR}-${MONTH}" \
-              --notes "Auto-synced from [CIRCABC (DG TAXUD)](https://circabc.europa.eu/ui/group/0e5f18c2-4b2f-42e9-aed4-dfe50ae1263b/library/64db9d0f-e7c9-4084-afe9-f47e70e53c10) and the [EC DDS2 daily portal](https://ec.europa.eu/taxation_customs/dds2/taric/daily_publications.jsp?Lang=en).
+          TITLE="EU TARIC $(date -u +%Y-%m)"
+          NOTES="Auto-synced from [CIRCABC (DG TAXUD)](https://circabc.europa.eu/ui/group/0e5f18c2-4b2f-42e9-aed4-dfe50ae1263b/library/64db9d0f-e7c9-4084-afe9-f47e70e53c10) and the [EC DDS2 daily portal](https://ec.europa.eu/taxation_customs/dds2/taric/daily_publications.jsp?Lang=en).
 
           Monthly XLSX extractions (nomenclature, duties, measures, geographical areas, exchange rates, legal basis) plus daily delta ZIPs."
+          # The monthly extraction is replaced in place as the Commission fills it; a daily archive
+          # is published once.
+          monthly=$(find downloads/eu -maxdepth 1 -type f -name 'eu-taric-*.zip' | sort)
+          daily=$(find downloads/eu -maxdepth 1 -type f -name '*.zip' ! -name 'eu-taric-*.zip' | sort)
+          [ -z "$monthly" ] || scripts/publish-assets.sh --replace --title "$TITLE" --notes "$NOTES" "$TAG" $monthly
+          [ -z "$daily" ] || scripts/publish-assets.sh --title "$TITLE" --notes "$NOTES" "$TAG" $daily
 
-          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
-          for f in downloads/eu/*.zip; do
-            name=$(basename "$f")
-            # The monthly zip is the one asset that legitimately changes in place: CIRCABC keeps
-            # adding language files to the month for a couple of weeks after it first appears.
-            # sync-eu.ps1 only leaves it here when it rebuilt it, so reaching this branch means
-            # there is genuinely new content — clobber rather than skip. The daily delta zips
-            # (TARIC_*.zip) are immutable and keep the skip.
-            case "$name" in eu-taric-*.zip) MONTHLY=1 ;; *) MONTHLY=0 ;; esac
-            if [ "$MONTHLY" = "1" ]; then
-              echo "Uploading (clobber): $name"
-              scripts/archive-superseded.sh "$TAG" "$f"   # keep the copy this replaces
-              gh release upload "$TAG" "$f" --clobber
-            elif echo "$EXISTING" | grep -qF "\"$name\""; then
-              echo "Already uploaded: $name"
-            else
-              echo "Uploading: $name"
-              gh release upload "$TAG" "$f"
-            fi
-          done
+      # Last, and only when something above failed: an issue on this repository, so the failure
+      # reaches a person. See scripts/report-failure.sh.
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/report-failure.sh "${{ github.workflow }}" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

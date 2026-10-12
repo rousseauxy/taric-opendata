@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -52,19 +53,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="be-$(date -u +%Y-%m)"
+          PREVIOUS="be-$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)"
+          # A month that has not received its full extraction yet starts with last month's, so a
+          # consumer never finds a release of deltas alone.
+          scripts/publish-assets.sh \
+            --title "Belgium Tarbel ${TAG}" \
+            --notes "Scraped directly from the Belgian minfin [TARBEL portal](https://eservices.minfin.fgov.be/extTariffBrowser/XmlExtractions). Contains EU TARIC + Belgian national measures (BTW, RBT, accijnzen): one full extraction on the 1st of the month + daily deltas, plus XML schema docs and currency rates." \
+            --full-pattern '^export-[^_]+\.zip$' --carry-full-from "$PREVIOUS" \
+            "$TAG" downloads/be/*
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
-              --title "Belgium Tarbel ${TAG}" \
-              --notes "Scraped directly from the Belgian minfin [TARBEL portal](https://eservices.minfin.fgov.be/extTariffBrowser/XmlExtractions). Contains EU TARIC + Belgian national measures (BTW, RBT, accijnzen): one full extraction on the 1st of the month + daily deltas, plus XML schema docs and currency rates."
-
-          EXISTING=$(gh release view "$TAG" --json assets --jq '[.assets[].name]')
-          for f in downloads/be/*; do
-            name=$(basename "$f")
-            if echo "$EXISTING" | grep -qF "\"$name\""; then
-              echo "Already uploaded: $name"
-            else
-              echo "Uploading: $name"
-              gh release upload "$TAG" "$f"
-            fi
-          done
+      # Last, and only when something above failed: an issue on this repository, so the failure
+      # reaches a person. See scripts/report-failure.sh.
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/report-failure.sh "${{ github.workflow }}" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

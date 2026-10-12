@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -41,33 +42,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="fr-$(date -u +%Y-%m)"
+          scripts/publish-assets.sh --replace \
+            --title "France RITA ${TAG}" \
+            --notes "Auto-synced from [RITA (Référentiel Intégré Tarifaire Automatisé)](https://www.douane.gouv.fr/rita-encyclopedie/public/experts/telechargements/init.action). Contains EU TARIC + French national measures (TVA, droits d'accise, autres taxes nationales)." \
+            "$TAG" downloads/fr/*
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
-              --title "France RITA ${TAG}" \
-              --notes "Auto-synced from [RITA (Référentiel Intégré Tarifaire Automatisé)](https://www.douane.gouv.fr/rita-encyclopedie/public/experts/telechargements/init.action). Contains EU TARIC + French national measures (TVA, droits d'accise, autres taxes nationales)."
-
-          # -f: the chapter scratch dirs are removed on success, but a mid-run failure can
-          # leave one behind and gh release upload would choke on a directory.
-          #
-          # Retried, because the upload is not reliable and the failure is not clean. On
-          # 2026-08-10 15:26 the third of ten uploads returned "release not found" — seconds
-          # after `gh release view` had printed that same release and two files had gone up
-          # against it. With `bash -e` the loop then aborted, and the release was left holding
-          # CAC and CTX from that run and eight files from the day before: a mirror split across
-          # two days under one tag, which is worse than not having published at all.
-          for f in downloads/fr/*; do
-            [ -f "$f" ] || continue
-            echo "Uploading: $(basename "$f")"
-            scripts/archive-superseded.sh "$TAG" "$f"   # keep the copy this replaces
-            for try in 1 2 3 4; do
-              gh release upload "$TAG" "$f" --clobber && break
-              if [ "$try" = 4 ]; then
-                echo "::error::Upload of $(basename "$f") failed four times; the release is now" \
-                     "part-updated and must not be left that way."
-                exit 1
-              fi
-              echo "  retry $try in $((try * 5))s"
-              sleep $((try * 5))
-            done
-          done
+      # Last, and only when something above failed: an issue on this repository, so the failure
+      # reaches a person. See scripts/report-failure.sh.
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/report-failure.sh "${{ github.workflow }}" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -49,3 +50,11 @@ jobs:
             echo "Uploading: $name"
             gh release upload "$TAG" "$f" --clobber
           done
+
+      # Last, and only when something above failed: an issue on this repository, so the failure
+      # reaches a person. See scripts/report-failure.sh.
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/report-failure.sh "${{ github.workflow }}" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
