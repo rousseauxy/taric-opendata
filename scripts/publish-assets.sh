@@ -38,8 +38,9 @@
 #                             deltas alone: the Netherlands served nothing for three days in
 #                             September 2026 over exactly that
 #   --manifest                write release-manifest.json (see below). Every workflow passes it since
-#                             2026-10-14: the one consumer, TaricHive, leaves that name out of its
-#                             freshness marker since 2.19.3, and both of its hosts run 2.19.13
+#                             2026-10-14. Both consumers are safe with the extra asset: TaricHive leaves
+#                             the name out of its freshness marker (2.19.3 on), CustomsHive takes assets
+#                             by exact name or .zip only. A new consumer must do one or the other
 #
 # Environment: GITHUB_REPOSITORY, GH_TOKEN. PUBLISH_ALLOW_SHRINK=1 accepts a smaller replacement
 # for one run, for the day a publisher really does halve a file.
