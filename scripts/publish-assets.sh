@@ -37,9 +37,9 @@
 #                             one from that release (the previous month), so a month never starts on
 #                             deltas alone: the Netherlands served nothing for three days in
 #                             September 2026 over exactly that
-#   --manifest                write release-manifest.json (see below); off until every consumer
-#                             ignores that name, because an extra asset moves a consumer's freshness
-#                             marker once
+#   --manifest                write release-manifest.json (see below). Every workflow passes it since
+#                             2026-10-14: the one consumer, TaricHive, leaves that name out of its
+#                             freshness marker since 2.19.3, and both of its hosts run 2.19.13
 #
 # Environment: GITHUB_REPOSITORY, GH_TOKEN. PUBLISH_ALLOW_SHRINK=1 accepts a smaller replacement
 # for one run, for the day a publisher really does halve a file.

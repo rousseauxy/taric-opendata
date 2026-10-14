@@ -48,12 +48,10 @@ jobs:
         run: |
           MONTH=$(date -u +%Y-%m)
           TAG="eurlex-$MONTH"
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" --title "EU customs legislation $MONTH" \
-              --notes "EU customs legislation from CELLAR."
-          for f in downloads/eurlex/eurlex-text-*.zip; do
-            [ -e "$f" ] && gh release upload "$TAG" "$f" --clobber
-          done
+          scripts/publish-assets.sh --manifest --replace \
+            --title "EU customs legislation $MONTH" \
+            --notes "EU customs legislation from CELLAR." \
+            "$TAG" downloads/eurlex/eurlex-text-*.zip
 
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.

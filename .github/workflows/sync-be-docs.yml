@@ -68,13 +68,14 @@ jobs:
           TAG="be-$SYS-$MONTH"
           TITLE="$(cat "downloads/be-$SYS-title.txt") $MONTH"
 
-          gh release view "$TAG" >/dev/null 2>&1 || \
-            gh release create "$TAG" --title "$TITLE" --notes-file "downloads/be-$SYS-notes.md"
-
+          files=()
           for f in downloads/be-$SYS/*; do
-            case "$f" in *.tmp) continue ;; esac
-            gh release upload "$TAG" "$f" --clobber
+            case "$f" in *.tmp) ;; *) files+=("$f") ;; esac
           done
+          scripts/publish-assets.sh --manifest --replace \
+            --title "$TITLE" \
+            --notes "$(cat "downloads/be-$SYS-notes.md")" \
+            "$TAG" "${files[@]}"
 
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.

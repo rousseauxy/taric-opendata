@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="fr-$(date -u +%Y-%m)"
-          scripts/publish-assets.sh --replace \
+          scripts/publish-assets.sh --manifest --replace \
             --title "France RITA ${TAG}" \
             --notes "Auto-synced from [RITA (Référentiel Intégré Tarifaire Automatisé)](https://www.douane.gouv.fr/rita-encyclopedie/public/experts/telechargements/init.action). Contains EU TARIC + French national measures (TVA, droits d'accise, autres taxes nationales)." \
             "$TAG" downloads/fr/*

@@ -55,10 +55,10 @@ jobs:
           NOTES="Auto-synced from the Dutch Douane [DTV bulk download](https://kennisbank.douane.nl/wp-content/uploads/tariff/download_bestanden.xml). Contains EU TARIC + Dutch national measures (BTW, accijns)."
           # The publisher's own listing is republished under a constant name; the dated archives are not.
           if [ -f downloads/nl/manifest.xml ]; then
-            PUBLISH_ALLOW_SHRINK=1 scripts/publish-assets.sh --replace --title "$TITLE" --notes "$NOTES" "$TAG" downloads/nl/manifest.xml
+            PUBLISH_ALLOW_SHRINK=1 scripts/publish-assets.sh --manifest --replace --title "$TITLE" --notes "$NOTES" "$TAG" downloads/nl/manifest.xml
           fi
           files=$(find downloads/nl -maxdepth 1 -type f ! -name manifest.xml | sort)
-          [ -z "$files" ] || scripts/publish-assets.sh --title "$TITLE" --notes "$NOTES" "$TAG" $files
+          [ -z "$files" ] || scripts/publish-assets.sh --manifest --title "$TITLE" --notes "$NOTES" "$TAG" $files
 
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.

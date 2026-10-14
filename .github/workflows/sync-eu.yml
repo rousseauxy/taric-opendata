@@ -85,8 +85,8 @@ jobs:
           # is published once.
           monthly=$(find downloads/eu -maxdepth 1 -type f -name 'eu-taric-*.zip' | sort)
           daily=$(find downloads/eu -maxdepth 1 -type f -name '*.zip' ! -name 'eu-taric-*.zip' | sort)
-          [ -z "$monthly" ] || scripts/publish-assets.sh --replace --title "$TITLE" --notes "$NOTES" "$TAG" $monthly
-          [ -z "$daily" ] || scripts/publish-assets.sh --title "$TITLE" --notes "$NOTES" "$TAG" $daily
+          [ -z "$monthly" ] || scripts/publish-assets.sh --manifest --replace --title "$TITLE" --notes "$NOTES" "$TAG" $monthly
+          [ -z "$daily" ] || scripts/publish-assets.sh --manifest --title "$TITLE" --notes "$NOTES" "$TAG" $daily
 
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.

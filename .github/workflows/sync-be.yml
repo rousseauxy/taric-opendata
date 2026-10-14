@@ -56,7 +56,7 @@ jobs:
           PREVIOUS="be-$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)"
           # A month that has not received its full extraction yet starts with last month's, so a
           # consumer never finds a release of deltas alone.
-          scripts/publish-assets.sh \
+          scripts/publish-assets.sh --manifest \
             --title "Belgium Tarbel ${TAG}" \
             --notes "Scraped directly from the Belgian minfin [TARBEL portal](https://eservices.minfin.fgov.be/extTariffBrowser/XmlExtractions). Contains EU TARIC + Belgian national measures (BTW, RBT, accijnzen): one full extraction on the 1st of the month + daily deltas, plus XML schema docs and currency rates." \
             --full-pattern '^export-[^_]+\.zip$' --carry-full-from "$PREVIOUS" \

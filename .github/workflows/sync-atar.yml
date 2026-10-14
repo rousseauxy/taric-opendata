@@ -48,13 +48,10 @@ jobs:
           MONTH=$(date -u +%Y-%m)
           TAG="atar-$MONTH"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
-              --title "UK Advance Tariff Rulings (ATaR) $MONTH" \
-              --notes "Auto-scraped from the GOV.UK [Search for Advance Tariff Rulings](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) service (Open Government Licence). The GB analogue of EU BTIs: ruling reference, commodity code, validity dates, goods description, keywords, and grounds for classification."
-
-          gh release upload "$TAG" downloads/atar/atar.csv --clobber
-          gh release upload "$TAG" downloads/atar/atar-version.txt --clobber
+          scripts/publish-assets.sh --manifest --replace \
+            --title "UK Advance Tariff Rulings (ATaR) $MONTH" \
+            --notes "Auto-scraped from the GOV.UK [Search for Advance Tariff Rulings](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) service (Open Government Licence). The GB analogue of EU BTIs: ruling reference, commodity code, validity dates, goods description, keywords, and grounds for classification." \
+            "$TAG" downloads/atar/atar.csv downloads/atar/atar-version.txt
 
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.

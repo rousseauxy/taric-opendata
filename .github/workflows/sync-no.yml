@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="no-$(date -u +%Y-%m)"
-          scripts/publish-assets.sh --replace \
+          scripts/publish-assets.sh --manifest --replace \
             --title "Norway Customs Tariff ${TAG}" \
             --notes "Auto-synced from [Tolletaten open data](https://data.toll.no) (CC BY 4.0). Includes all 27 published datasets: tariff structure, duty rates, quotas, restrictions, trade agreements, country groups, exchange rates, and more." \
             "$TAG" downloads/no/*

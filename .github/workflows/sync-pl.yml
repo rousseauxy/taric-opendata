@@ -67,15 +67,10 @@ jobs:
         run: |
           TAG="pl-$(date -u +%Y)"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
-              --title "Poland ISZTAR4 ${TAG}" \
-              --notes "Auto-synced from [ISZTAR4 XmlExtractions](https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions). Full startup file containing all EU TARIC + Polish national tariff objects (~7.7 GB XML, ~220 MB compressed ZIP). Source: Ministry of Finance (Ministerstwo Finansów) + European Commission DG TAXUD."
-
-          # The sidecar goes up with it, so the next run has something to compare against.
-          gh release upload "$TAG" \
-            downloads/pl/isztar4-base.zip \
-            downloads/pl/isztar4-base.zip.sha256 --clobber
+          scripts/publish-assets.sh --manifest --replace \
+            --title "Poland ISZTAR4 ${TAG}" \
+            --notes "Auto-synced from [ISZTAR4 XmlExtractions](https://ext-isztar4.mf.gov.pl/taryfa_celna/XmlExtractions). Full startup file containing all EU TARIC + Polish national tariff objects (~7.7 GB XML, ~220 MB compressed ZIP). Source: Ministry of Finance (Ministerstwo Finansów) + European Commission DG TAXUD." \
+            "$TAG" downloads/pl/isztar4-base.zip downloads/pl/isztar4-base.zip.sha256
 
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.

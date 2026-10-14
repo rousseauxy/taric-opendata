@@ -55,17 +55,10 @@ jobs:
           MONTH=$(date -u +%Y-%m)
           TAG="eurlex-$MONTH"
 
-          gh release view "$TAG" 2>/dev/null || \
-            gh release create "$TAG" \
-              --title "EU secondary legislation $MONTH" \
-              --notes "Auto-synced from the EU Publications Office [CELLAR](http://publications.europa.eu/webapi/rdf/sparql) SPARQL endpoint. Metadata manifest of ALL EU secondary legislation (CELEX sector 3 — regulations, directives, decisions; ~233k acts): CELEX, title, Official Journal id, document/validity dates, in-force flag, resource type, ELI, and legal-act directory codes. This covers every regulation a TARIC measure can reference (a GeneratingRegulationId always maps to a sector-3 CELEX). Full text is published separately (manually) via the *full* workflow. Also includes cnen-en.html — the consolidated CN Explanatory Notes (CNEN). Updated daily when the work set or CNEN changes."
-
-          if [ -f downloads/eurlex/eurlex-manifest.csv ]; then gh release upload "$TAG" downloads/eurlex/eurlex-manifest.csv --clobber; fi
-          if [ -f downloads/eurlex/eurlex-version.txt ];  then gh release upload "$TAG" downloads/eurlex/eurlex-version.txt  --clobber; fi
-          if [ -f downloads/eurlex/cnen-en.html ];        then gh release upload "$TAG" downloads/eurlex/cnen-en.html        --clobber; fi
-          if [ -f downloads/eurlex/cnen-version.txt ];    then gh release upload "$TAG" downloads/eurlex/cnen-version.txt    --clobber; fi
-          if [ -f downloads/eurlex/cn-notes.csv ];        then gh release upload "$TAG" downloads/eurlex/cn-notes.csv        --clobber; fi
-          if [ -f downloads/eurlex/cn-notes-version.txt ]; then gh release upload "$TAG" downloads/eurlex/cn-notes-version.txt --clobber; fi
+          scripts/publish-assets.sh --manifest --replace \
+            --title "EU secondary legislation $MONTH" \
+            --notes "Auto-synced from the EU Publications Office [CELLAR](http://publications.europa.eu/webapi/rdf/sparql) SPARQL endpoint. Metadata manifest of ALL EU secondary legislation (CELEX sector 3 — regulations, directives, decisions; ~233k acts): CELEX, title, Official Journal id, document/validity dates, in-force flag, resource type, ELI, and legal-act directory codes. This covers every regulation a TARIC measure can reference (a GeneratingRegulationId always maps to a sector-3 CELEX). Full text is published separately (manually) via the *full* workflow. Also includes cnen-en.html — the consolidated CN Explanatory Notes (CNEN). Updated daily when the work set or CNEN changes." \
+            "$TAG" downloads/eurlex/eurlex-manifest.csv downloads/eurlex/eurlex-version.txt downloads/eurlex/cnen-en.html downloads/eurlex/cnen-version.txt downloads/eurlex/cn-notes.csv downloads/eurlex/cn-notes-version.txt
 
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.
