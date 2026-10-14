@@ -84,7 +84,12 @@ except Exception:
 PYEOF
       ;;
     *.gz)
-      gzip -t "$file" 2>/dev/null || { echo "it is not a valid gzip stream"; return 1; }
+      # gzip exits 1 on an error (not gzip at all, a truncated stream) and 2 on a warning. Sweden's
+      # archives carry bytes after the stream ("decompression OK, trailing garbage ignored": one of
+      # 2026-10-13 holds 95 of them and decompresses whole, 14 KB to 458 KB), have been imported
+      # daily for months, and the first run through this gate refused two of them. A warning passes.
+      local rc=0; gzip -t "$file" 2>/dev/null || rc=$?
+      [ "$rc" = 0 ] || [ "$rc" = 2 ] || { echo "it is not a valid gzip stream"; return 1; }
       ;;
   esac
   case "${name,,}" in
