@@ -109,6 +109,20 @@ jobs:
             --notes "Auto-synced from the [DBT Data API](https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01). Contains all 50 UK Global Tariff tables (commodities, measures, quotas, regulations, certificates, geo areas, footnotes, and more) as CSV. Version is embedded in each filename." \
             "$TAG" downloads/gb/*
 
+      # HMRC's monthly exchange rates (B-63 in TaricHive), independent of whether the tariff tables
+      # changed today. One combined file under a constant name: unchanged bytes upload nothing, so
+      # the release only moves when HMRC publishes a new month.
+      - name: Fetch HMRC exchange rates
+        shell: pwsh
+        run: scripts/sync-gb-fx.ps1 -OutputFolder downloads/gb-fx
+
+      - name: Publish HMRC exchange rates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="gb-$(date -u +%Y-%m)"
+          scripts/publish-assets.sh --manifest --replace --title "UK Global Tariff ${TAG}" --notes "Auto-synced from the [DBT Data API](https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01) and HMRC's monthly exchange rates (Open Government Licence)." "$TAG" downloads/gb-fx/hmrc-exchange-rates.csv
+
       # Last, and only when something above failed: an issue on this repository, so the failure
       # reaches a person. See scripts/report-failure.sh.
       - name: Report failure

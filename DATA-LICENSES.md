@@ -25,6 +25,7 @@ make the same public files reachable over plain HTTP without portal navigation.
 | Code | Source | Status | Licence / basis | Required attribution |
 |------|--------|--------|-----------------|----------------------|
 | `gb` | [DBT Data API](https://data.api.trade.gov.uk/v1/datasets/uk-tariff-2021-01-01) — UK Department for Business and Trade | Open licence | [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | "Contains public sector information licensed under the Open Government Licence v3.0." |
+| `gb` (`hmrc-exchange-rates.csv`) | [UK Trade Tariff exchange rates](https://www.trade-tariff.service.gov.uk/exchange_rates) — HMRC, monthly | Open licence | [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | As above. |
 | `atar` | [GOV.UK Search for Advance Tariff Rulings](https://www.tax.service.gov.uk/search-for-advance-tariff-rulings/) — HMRC | Open licence | [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | As above. |
 | `no` | [data.toll.no](https://data.toll.no/dataset/customstariffstructure) — Tolletaten (Norwegian Customs) | Open licence | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | "Tolletaten, CC BY 4.0." |
 | `us` | [USITC HTS](https://hts.usitc.gov/) | Public domain | Work of the U.S. Government, [17 U.S.C. §105](https://www.law.cornell.edu/uscode/text/17/105) | None required; credit USITC as a courtesy. |
