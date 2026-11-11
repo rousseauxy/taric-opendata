@@ -1,0 +1,15 @@
+# Dependency updates for this repository (GitHub Dependabot). Its only dependencies are the GitHub Actions the
+# workflows use: one grouped pull request a week. Nothing merges itself.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Brussels
+    labels: [dependencies]
+    groups:
+      actions:
+        patterns: ["*"]
