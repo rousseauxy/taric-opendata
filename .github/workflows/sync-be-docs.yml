@@ -29,7 +29,7 @@ jobs:
       SYS: ${{ inputs.system }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Fetch stored version marker
         env:
@@ -49,7 +49,7 @@ jobs:
       # The notes file is written only when there is something to publish.
       - name: Set up Python
         if: hashFiles(format('downloads/be-{0}-notes.md', inputs.system)) != ''
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
