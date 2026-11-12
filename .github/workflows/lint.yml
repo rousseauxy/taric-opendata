@@ -19,7 +19,7 @@ jobs:
   retry-coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Every HTTP call in a sync script must be retried
         shell: pwsh
@@ -28,6 +28,6 @@ jobs:
   publish-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Every release upload goes through scripts/publish-assets.sh
         run: bash scripts/Test-PublishGate.sh
