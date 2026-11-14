@@ -195,31 +195,15 @@ Write-Host "Daily deltas downloaded: $dlCount"
 
 # ─── TARIC Business codes & Correlation tables (CIRCABC reference library) ───
 # Second CIRCABC library: group 0e5f18c2 / library 90dd4b94-39dd-45f4-8f33-ec9ef9820016
-# These nodes only resolve via the CMIS path, not the Atom API used above.
-
-$CmisBase = "https://circabc.europa.eu/service/cmis/s/workspace:SpacesStore/i"
-
-function Get-CircabcChildren($nodeId) {
-    $r = Invoke-WithRetry -What "CIRCABC CMIS children" -Action {
-        Invoke-WebRequest -Uri "$CmisBase/$nodeId/children" -UserAgent $UA -UseBasicParsing -Headers $Headers -TimeoutSec 30
-    }
-    ([xml]$r.Content).feed.entry | ForEach-Object {
-        $href = ($_.link | Where-Object { $_.rel -eq 'self' }).href
-        $href -match 'i/([0-9a-f-]{36})' | Out-Null
-        [PSCustomObject]@{
-            Title    = $_.title.'#text' ?? $_.title
-            NodeId   = $matches[1]
-            MimeType = $_.content.type
-        }
-    }
-}
+# Until 2026-11 these nodes only resolved via the CMIS path (/service/cmis/s/.../i/<id>/children);
+# CIRCABC then dropped that path (404 for every node) and the Atom API used above serves them instead.
 
 Write-Host ""
 Write-Host "Syncing TARIC Business codes and Correlation tables..."
 $refCount = 0; $refSkip = 0
 
 # Business codes — single library with files at root
-foreach ($item in (Get-CircabcChildren '3fdd730a-0988-4b75-bab5-5f416022452c') |
+foreach ($item in (Get-Children '3fdd730a-0988-4b75-bab5-5f416022452c') |
         Where-Object { $_.MimeType -match 'spreadsheet|excel|ms-excel' }) {
     $safeName = $item.Title -replace '[<>:"/\\|?*]', '_'
     $outPath  = Join-Path $OutputFolder $safeName
@@ -236,10 +220,10 @@ foreach ($item in (Get-CircabcChildren '3fdd730a-0988-4b75-bab5-5f416022452c') |
 }
 
 # Correlation tables — walk subfolders (HS-CN-TARIC, Dual use codes, REACH, Sanctions against Russia)
-foreach ($folder in (Get-CircabcChildren '3de7201f-51e1-4379-8f45-6cce273e97f0') |
+foreach ($folder in (Get-Children '3de7201f-51e1-4379-8f45-6cce273e97f0') |
         Where-Object { -not $_.MimeType }) {
     Write-Host "  Subfolder: $($folder.Title)"
-    foreach ($item in (Get-CircabcChildren $folder.NodeId) |
+    foreach ($item in (Get-Children $folder.NodeId) |
             Where-Object { $_.MimeType -match 'spreadsheet|excel|ms-excel' }) {
         $safeName = "$($folder.Title) - $($item.Title)" -replace '[<>:"/\\|?*]', '_'
         $outPath  = Join-Path $OutputFolder $safeName
