@@ -24,7 +24,7 @@ jobs:
       issues: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # RITA publishes stable filenames, so assets are replaced in place (as for CH).
       # Skipping files already in the release would freeze the mirror at the first run of
